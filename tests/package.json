@@ -1,0 +1,8 @@
+{
+  "name": "sgax-crm-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Автотесты интерфейса SGAX CRM (эмулятор браузера)",
+  "scripts": { "test": "node test-ui.js && node test-all.js" },
+  "dependencies": { "jsdom": "^24.0.0" }
+}

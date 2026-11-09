@@ -133,6 +133,8 @@ function doLogin(){
       return;
     }
     ME = j.user; AUTH.step = 1; AUTH.password = ''; AUTH.code = '';
+    PERMS = {};
+    api('/me').then(function(m){ if (m.ok) PERMS = m.perms; });
     enterApp();
   });
 }
@@ -174,16 +176,18 @@ function roleMeta(role){
 }
 
 function enterApp(){
+  if (!ME){ hardLogout(); return; }
   $('auth').classList.remove('on');
   $('app').classList.add('on');
+  render();
+  if (ME.mustChange) forcePassword();
   api('/me').then(function(j){
-    if (j.ok){ ME = j.user; PERMS = j.perms; }
-    render();
-    if (ME && ME.mustChange) forcePassword();
-  });
+    if (j.ok){ ME = j.user; PERMS = j.perms; renderShell(); }
+  }).catch(function(){ /* сеть недоступна — работаем на данных входа */ });
 }
 
 function renderShell(){
+  if (!ME) return;
   var m = roleMeta(ME.role);
   var crown = ME.role === 'founder' ? '👑 ' : '';
   $('side').innerHTML =
@@ -195,6 +199,7 @@ function renderShell(){
         if (it.id === 'settings') hide = !PERMS['settings.edit'];
         if (it.id === 'log') hide = !(ME.role === 'founder' || ME.role === 'head');
         if (it.id === 'monitor') hide = !(ME.role === 'founder' || ME.role === 'head');
+        if (it.id === 'team') hide = !(ME.role === 'founder' || ME.role === 'head');
         if (hide) return '';
         return '<button class="nitem'+(VIEW===it.id?' on':'')+'" data-v="'+it.id+'"><span class="ni">'+it.ic+'</span>'+it.t+
           (it.id==='code'?'<span class="nb amber" id="navCode" style="display:none">!</span>':'')+
@@ -226,6 +231,7 @@ function titleOf(v){
 }
 
 function render(){
+  if (!ME){ hardLogout(); return; }
   if (typeof monitorTimer !== 'undefined' && monitorTimer && VIEW !== 'monitor'){ clearInterval(monitorTimer); monitorTimer = null; }
   renderShell();
   var c = $('dash');
@@ -436,7 +442,7 @@ function wizardOpen(venues, deal){
 function wizardClose(){
   $('wizard').classList.remove('on');
   $('dash').classList.add('on');
-  saveWizard(false);
+  W.data = null; W.active = null; W.step = 1;
   render();
 }
 
@@ -559,24 +565,25 @@ function wStepBody(){
       var hh = '<button class="btn ghost sm" id="wBackList">← К списку площадок</button>';
       hh += '<div class="wp-title" style="margin-top:12px">Площадка '+idx+'. '+(v.name?esc(v.name):'без названия')+'</div>';
       hh += '<div class="wp-sub">'+esc(v.niche||s.niche||'—')+' · '+(v.type||'discord')+' · '+rub0(v.subs)+' подписчиков</div>';
+      var BL = {};
       // блок 1
-      hh += wBlock(1,'Что это за площадка',[
+      BL[1] = ([
         wField('Название','<input id="vName" value="'+esc(v.name)+'" placeholder="RUST • Сервер #1">'),
         '<div class="wf"><label>Тип</label><div class="chip-pick">'+['discord','telegram','tma','vk'].map(function(t){ return '<button data-vtype="'+t+'" class="'+(v.type===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div></div>',
         '<div class="wf"><label>Ниша</label><div class="chip-pick">'+['RUST','Гейминг','Крипта / Web3','IT / разработка','Аниме','Мемы','Учёба','Бизнес'].map(function(t){ return '<button data-vniche="'+esc(t)+'" class="'+(v.niche===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div></div>'
-      ].join(''));
+      ]).join('');
       // блок 2
-      hh += wBlock(2,'Аудитория',[
+      BL[2] = ([
         '<div class="grid g2"><div class="wf"><label>Подписчиков</label><input type="number" id="vSubs" value="'+(v.subs||'')+'"></div>'+
         '<div class="wf"><label>Охват одного поста</label><input type="number" id="vReach" value="'+(v.reach||'')+'"></div></div>',
         '<button class="btn ghost sm" id="vReach30">Оценить охват как 30% от подписчиков</button>'
-      ].join(''));
+      ]).join('');
       // блок 3
-      hh += wBlock(3,'Условия владельца',[
+      BL[3] = ([
         '<div class="grid g2"><div class="wf"><label>Цена владельца за 1 размещение, ₽</label><input type="number" id="vPrice" value="'+(v.price||'')+'"></div>'+
         '<div class="wf"><label>Сколько размещений</label><input type="number" id="vQty" value="'+(v.qty||1)+'" min="1"></div></div>',
         '<div class="wsum"><span>Владельцу за всё</span><b>'+rub(c.ownerTotal)+'</b></div>'
-      ].join(''));
+      ]).join('');
       // блок 4
       var optRows = OPTS.map(function(o){
         var on = (v.opts||[]).indexOf(o.k)>=0;
@@ -584,16 +591,22 @@ function wStepBody(){
           '<div style="flex:1"><b>'+o.n+'</b><div class="dim" style="font-size:11.5px">'+o.d+'</div></div>'+
           '<span class="woptp">+'+o.v+'%</span></label>';
       }).join('');
-      hh += wBlock(4,'Допродажи',[ optRows,
+      BL[4] = ([ optRows,
         '<div class="wf" style="margin-top:10px"><label>Своя допродажа суммой, ₽</label><input type="number" id="vCustom" value="'+(v.customOptSum||'')+'" placeholder="0"></div>'
-      ].join(''));
+      ]).join('');
       // блок 5
-      hh += wBlock(5,'Наша ставка',[
+      BL[5] = ([
         '<div class="wf"><div class="chip-pick">'+
           '<button data-vrate="global" class="'+(v.ownRate===null?'on':'')+'">Общая ('+s.rate+'%)</button>'+
           '<button data-vrate="own" class="'+(v.ownRate!==null?'on':'')+'">Своя</button></div></div>',
         (v.ownRate!==null ? '<div class="wf"><label>Ставка для этой площадки, %</label><input type="number" id="vOwnRate" value="'+(v.ownRate||'')+'"></div>' : '')
-      ].join(''));
+      ]).join('');
+
+      hh += wBlock(1,'Что это за площадка', BL[1]);
+      hh += wBlock(2,'Аудитория', BL[2]);
+      hh += wBlock(3,'Условия владельца', BL[3]);
+      hh += wBlock(4,'Допродажи', BL[4]);
+      hh += wBlock(5,'Наша ставка', BL[5]);
       // итог по площадке
       hh += '<div class="wcard" style="margin-top:14px;background:var(--card2)">'+
         '<div class="wsum"><span>Владельцу</span><b style="color:var(--owner)">'+rub(c.ownerTotal)+'</b></div>'+
@@ -711,9 +724,10 @@ function wStepBody(){
 function wField(label, input){ return '<div class="wf"><label>'+label+'</label>'+input+'</div>'; }
 function wBlock(n, title, body){
   var open = (W.opened===n);
+  var inner = Array.isArray(body) ? body.join('') : String(body || '');
   return '<div class="wblock'+(open?' open':'')+'" data-block="'+n+'">'+
     '<div class="wbh"><div class="wbn">'+n+'</div><div style="flex:1"><b>'+title+'</b></div><span class="wchev">▶</span></div>'+
-    '<div class="wbb">'+body.join('')+'</div></div>';
+    '<div class="wbb">'+inner+'</div></div>';
 }
 function wRateCard(val, title, sub, on){
   return '<div class="wrate'+(on?' on':'')+'" data-rate="'+val+'">'+
@@ -721,70 +735,91 @@ function wRateCard(val, title, sub, on){
 }
 
 /* ---------- bindings ---------- */
+function wOn(sel, ev, fn){
+  var el = document.querySelector(sel);
+  if (el) el[ev] = fn(el);
+  return el;
+}
+function wAll(sel, ev, fn){
+  document.querySelectorAll(sel).forEach(function(el){ el[ev] = fn(el); });
+}
+
 function wBind(){
   var s = W.data;
-  // step1
-  var el;
-  if ((el=$('wClient'))) el.oninput=function(){ s.client=el.value; };
-  if ((el=$('wBudget'))) el.oninput=function(){ s.budget=el.value; };
-  if ((el=$('wDate'))) el.onchange=function(){ s.dealDate=el.value; };
-  document.querySelectorAll('[data-type]').forEach(function(b){ b.onclick=function(){ s.type=b.dataset.type; wRender(); }; });
-  document.querySelectorAll('[data-niche]').forEach(function(b){ b.onclick=function(){ s.niche=b.dataset.niche; wRender(); }; });
 
-  // step2 list
-  document.querySelectorAll('[data-vopen]').forEach(function(tr){ tr.onclick=function(){ W.active=tr.dataset.vopen; W.opened=1; wRender(); }; });
-  if ((el=$('wAddManual'))) el.onclick=function(){ addVenue(null); };
-  if ((el=$('wAddFromBase'))) el.onclick=function(){ pickFromBase(); };
-  if ((el=$('wBackList'))) el.onclick=function(){ W.active=null; wRender(); };
-  if ((el=$('wBackList2'))) el.onclick=function(){ W.active=null; wRender(); };
-  if ((el=$('wDelVenue'))) el.onclick=function(){
-    W.data.venues = W.data.venues.filter(function(x){ return x.id!==W.active; });
-    W.active=null; wRender();
-  };
-  // venue detail fields
-  var v = W.active ? s.venues.filter(function(x){ return x.id===W.active; })[0] : null;
+  /* --- шаг 1 --- */
+  wOn('#wClient','oninput', function(el){ return function(){ s.client = el.value; }; });
+  wOn('#wBudget','oninput', function(el){ return function(){ s.budget = el.value; }; });
+  wOn('#wDate','onchange',  function(el){ return function(){ s.dealDate = el.value; }; });
+  wAll('[data-type]','onclick',  function(el){ return function(){ s.type = el.dataset.type; wRender(); }; });
+  wAll('[data-niche]','onclick', function(el){ return function(){ s.niche = el.dataset.niche; wRender(); }; });
+
+  /* --- шаг 2: список --- */
+  wAll('[data-vopen]','onclick', function(el){ return function(){ W.active = el.dataset.vopen; W.opened = 1; wRender(); }; });
+  wOn('#wAddManual','onclick',  function(){ return function(){ addVenue(null); }; });
+  wOn('#wAddFromBase','onclick',function(){ return function(){ pickFromBase(); }; });
+  wOn('#wBackList','onclick',   function(){ return function(){ W.active = null; wRender(); }; });
+  wOn('#wBackList2','onclick',  function(){ return function(){ W.active = null; wRender(); }; });
+  wOn('#wDelVenue','onclick',   function(){ return function(){
+    W.data.venues = W.data.venues.filter(function(x){ return x.id !== W.active; });
+    W.active = null; wRender();
+  }; });
+
+  /* --- шаг 2: карточка площадки --- */
+  var v = W.active ? s.venues.filter(function(x){ return x.id === W.active; })[0] : null;
   if (v){
-    if ((el=$('vName'))) el.oninput=function(){ v.name=el.value; };
-    if ((el=$('vSubs'))) el.oninput=function(){ v.subs=el.value; };
-    if ((el=$('vReach'))) el.oninput=function(){ v.reach=el.value; };
-    if ((el=$('vPrice'))) el.oninput=function(){ v.price=el.value; wRender(); };
-    if ((el=$('vQty'))) el.oninput=function(){ v.qty=el.value; wRender(); };
-    if ((el=$('vCustom'))) el.oninput=function(){ v.customOptSum=el.value; wRender(); };
-    if ((el=$('vOwnRate'))) el.oninput=function(){ v.ownRate=el.value; wRender(); };
-    if ((el=$('vReach30'))) el.onclick=function(){ v.reach=Math.round((Number(v.subs)||0)*0.3); wRender(); };
-    document.querySelectorAll('[data-vtype]').forEach(function(b){ b.onclick=function(){ v.type=b.dataset.vtype; wRender(); }; });
-    document.querySelectorAll('[data-vniche]').forEach(function(b){ b.onclick=function(){ v.niche=b.dataset.vniche; wRender(); }; });
-    document.querySelectorAll('[data-opt]').forEach(function(cb){ cb.onchange=function(){
-      v.opts = v.opts||[];
-      if (cb.checked){ if (v.opts.indexOf(cb.dataset.opt)<0) v.opts.push(cb.dataset.opt); }
-      else { v.opts = v.opts.filter(function(k){ return k!==cb.dataset.opt; }); }
+    wOn('#vName','oninput',    function(el){ return function(){ v.name = el.value; }; });
+    wOn('#vSubs','oninput',    function(el){ return function(){ v.subs = el.value; }; });
+    wOn('#vReach','oninput',   function(el){ return function(){ v.reach = el.value; }; });
+    wOn('#vPrice','oninput',   function(el){ return function(){ v.price = el.value; wRender(); }; });
+    wOn('#vQty','oninput',     function(el){ return function(){ v.qty = el.value; wRender(); }; });
+    wOn('#vCustom','oninput',  function(el){ return function(){ v.customOptSum = el.value; wRender(); }; });
+    wOn('#vOwnRate','oninput', function(el){ return function(){ v.ownRate = el.value; wRender(); }; });
+    wOn('#vReach30','onclick', function(){ return function(){ v.reach = Math.round((Number(v.subs)||0) * 0.3); wRender(); }; });
+    wAll('[data-vtype]','onclick',  function(el){ return function(){ v.type = el.dataset.vtype; wRender(); }; });
+    wAll('[data-vniche]','onclick', function(el){ return function(){ v.niche = el.dataset.vniche; wRender(); }; });
+    wAll('[data-opt]','onchange', function(el){ return function(){
+      v.opts = v.opts || [];
+      if (el.checked){ if (v.opts.indexOf(el.dataset.opt) < 0) v.opts.push(el.dataset.opt); }
+      else { v.opts = v.opts.filter(function(k){ return k !== el.dataset.opt; }); }
       wRender();
     }; });
-    document.querySelectorAll('[data-vrate]').forEach(function(b){ b.onclick=function(){
-      v.ownRate = b.dataset.vrate==='own' ? (v.ownRate===null?15:v.ownRate) : null; wRender();
+    wAll('[data-vrate]','onclick', function(el){ return function(){
+      v.ownRate = el.dataset.vrate === 'own' ? (v.ownRate === null ? 15 : v.ownRate) : null;
+      wRender();
     }; });
-    document.querySelectorAll('.wbh').forEach(function(bh){
-      bh.onclick=function(){ var n=Number(bh.parentElement.dataset.block); W.opened = (W.opened===n?null:n); wRender(); };
-    });
+    wAll('.wbh','onclick', function(el){ return function(){
+      var n = Number(el.parentElement.dataset.block);
+      W.opened = (W.opened === n ? null : n);
+      wRender();
+    }; });
   }
-  // step3
-  if ((el=$('wRateR'))) el.oninput=function(){ s.rate=Number(el.value); var d=$('wRateVal'); if(d) d.textContent=s.rate+'%'; };
-  if ((el=$('wRateR'))) el.onchange=function(){ s.rate=Number(el.value); wRender(); };
-  document.querySelectorAll('[data-rate]').forEach(function(b){ b.onclick=function(){ s.rate=Number(b.dataset.rate); wRender(); }; });
-  // step4
-  if ((el=$('wSvcAdd'))) el.onclick=function(){ s.services.push({name:'Новая услуга',price:0}); wRender(); };
-  if ((el=$('wSvcLib'))) el.onclick=function(){ svcLib(); };
-  document.querySelectorAll('[data-svcname]').forEach(function(inp){ inp.oninput=function(){ s.services[Number(inp.dataset.svcname)].name=inp.value; }; });
-  document.querySelectorAll('[data-svcprice]').forEach(function(inp){ inp.oninput=function(){ s.services[Number(inp.dataset.svcprice)].price=Number(inp.value)||0; }; });
-  document.querySelectorAll('[data-svcdel]').forEach(function(b){ b.onclick=function(){ s.services.splice(Number(b.dataset.svcdel),1); wRender(); }; });
-  // step5
-  if ((el=$('wOver'))) el.oninput=function(){ s.overhead=el.value; };
-  if ((el=$('wRef'))) el.oninput=function(){ s.refRate=el.value; };
-  document.querySelectorAll('[data-round]').forEach(function(b){ b.onclick=function(){ s.round=Number(b.dataset.round); wRender(); }; });
-  // step6
-  if ((el=$('wExport'))) el.onclick=wExport;
-  if ((el=$('wPrint'))) el.onclick=function(){ window.print(); };
-  if ((el=$('wDelete'))) el.onclick=wDelete;
+
+  /* --- шаг 3 --- */
+  wOn('#wRateR','oninput', function(el){ return function(){
+    s.rate = Number(el.value);
+    var d = document.getElementById('wRateVal');
+    if (d) d.textContent = s.rate + '%';
+  }; });
+  wOn('#wRateR','onchange', function(el){ return function(){ s.rate = Number(el.value); wRender(); }; });
+  wAll('[data-rate]','onclick', function(el){ return function(){ s.rate = Number(el.dataset.rate); wRender(); }; });
+
+  /* --- шаг 4 --- */
+  wOn('#wSvcAdd','onclick', function(){ return function(){ s.services.push({ name:'Новая услуга', price:0 }); wRender(); }; });
+  wOn('#wSvcLib','onclick', function(){ return function(){ svcLib(); }; });
+  wAll('[data-svcname]','oninput',  function(el){ return function(){ s.services[Number(el.dataset.svcname)].name = el.value; }; });
+  wAll('[data-svcprice]','oninput', function(el){ return function(){ s.services[Number(el.dataset.svcprice)].price = Number(el.value) || 0; }; });
+  wAll('[data-svcdel]','onclick',   function(el){ return function(){ s.services.splice(Number(el.dataset.svcdel),1); wRender(); }; });
+
+  /* --- шаг 5 --- */
+  wOn('#wOver','oninput', function(el){ return function(){ s.overhead = el.value; }; });
+  wOn('#wRef','oninput',  function(el){ return function(){ s.refRate = el.value; }; });
+  wAll('[data-round]','onclick', function(el){ return function(){ s.round = Number(el.dataset.round); wRender(); }; });
+
+  /* --- шаг 6 --- */
+  wOn('#wExport','onclick', function(){ return function(){ wExport(); }; });
+  wOn('#wPrint','onclick',  function(){ return function(){ window.print(); }; });
+  wOn('#wDelete','onclick', function(){ return function(){ wDelete(); }; });
 }
 
 function addVenue(fromBase){
@@ -1386,5 +1421,6 @@ function boot(){
     }).catch(function(){});
   });
 }
-document.addEventListener('DOMContentLoaded', boot);
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
 })();

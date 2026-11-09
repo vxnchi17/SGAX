@@ -19,3 +19,6 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+
+# тесты — зависимости не храним
+tests/node_modules/

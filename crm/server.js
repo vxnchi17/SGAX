@@ -335,9 +335,11 @@ async function api(req, res, url){
   }
 
   if (p === '/login' && method === 'POST'){
-    if (!rateLimit('login:' + ip, 20, 5*60e3)) return err(res, 429, 'Слишком много попыток. Подожди 5 минут.');
     const b = await readBody(req);
     const login = String(b.login || '').trim().toLowerCase();
+    // лимит по паре «IP + логин»: не мешает команде из одного офиса, но брутфорс одного аккаунта режет
+    if (!rateLimit('login:' + ip + ':' + login, 15, 5*60e3)) return err(res, 429, 'Слишком много попыток для этого логина. Подожди 5 минут.');
+    if (!rateLimit('login_ip:' + ip, 80, 5*60e3)) return err(res, 429, 'Слишком много попыток с этого адреса. Подожди 5 минут.');
     const u = DB.users.find(function(x){ return x.login.toLowerCase() === login; });
     if (!u) { log(login || '?', 'LOGIN_FAIL', 'no user', ''); return err(res, 401, 'Неверный логин или пароль'); }
     if (u.lockUntil && u.lockUntil > now()) return err(res, 423, 'Аккаунт временно заблокирован до ' + new Date(u.lockUntil).toLocaleTimeString('ru-RU'));

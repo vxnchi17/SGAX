@@ -372,7 +372,7 @@ async function api(req, res, url){
   if (!sess) return err(res, 401, 'Не авторизован');
   const me = sess.user;
   me.lastSeen = now();
-  const body = (method === 'POST' || method === 'PATCH' || method === 'DELETE') ? await readBody(req) : {};
+  const body = (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') ? await readBody(req) : {};
 
   if (p === '/logout' && method === 'POST'){
     sessions.delete(sess.token);
@@ -563,24 +563,80 @@ async function api(req, res, url){
   }
   if (p === '/deals' && method === 'POST'){
     const b = body;
-    const rate = Number(b.rate) || 15;
-    const ownerBase = Number(b.ownerBase) || 0;
-    const clientTotal = ownerBase / (1 - rate/100);
+    const gRate = Number(b.rate) || 15;
+    const calc = computeDeal(b, gRate);
     const d = {
       id: id('d'), client: String(b.client||'').trim(), niche: b.niche||'', type: b.type||'',
-      venues: Array.isArray(b.venues)? b.venues : [],
-      rate: rate, ownerBase: ownerBase, clientTotal: Math.round(clientTotal), our: Math.round(clientTotal-ownerBase),
-      net: Math.round(clientTotal-ownerBase),
-      services: b.services||[], overhead: Number(b.overhead)||0,
-      status: b.status || 'lead', managerId: me.role === 'manager' || me.role==='senior_manager' ? me.id : (b.managerId || me.id),
+      budget: Number(b.budget)||0, dealDate: b.dealDate||'',
+      venues: calc.venues,
+      rate: gRate, ownerBase: calc.ownerBase, clientVenues: calc.clientVenues,
+      services: calc.services, servicesSum: calc.servicesSum,
+      overhead: calc.overhead, refRate: calc.refRate, refSum: calc.refSum, round: calc.round,
+      clientTotal: calc.clientTotal, our: calc.our, net: calc.net, margin: calc.margin,
+      status: b.status || 'lead',
+      managerId: (me.role === 'manager' || me.role === 'senior_manager') ? me.id : (b.managerId || me.id),
       headId: me.headId || null, created: now(), closedAt: null, note: b.note || ''
     };
     if (!d.client) return err(res, 400, 'Нужно название клиента');
+    if (!d.venues.length) return err(res, 400, 'Добавь хотя бы одну площадку в пакет');
     DB.deals.unshift(d);
-    log(me.login, 'DEAL_CREATE', d.client, d.status + ' / ' + d.our + ' ₽');
+    log(me.login, 'DEAL_CREATE', d.client, d.venues.length + ' площадок / клиент ' + d.clientTotal + ' / нам ' + d.net);
     saveDB();
     return ok(res, { deal: d });
   }
+  if (p.match(/^\/deals\/[\w]+\/mediaplan$/) && method === 'GET'){
+    const did = p.split('/')[2];
+    const d = DB.deals.find(function(x){ return x.id === did; });
+    if (!d) return err(res, 404, 'Нет сделки');
+    if (!canSeeDeal(me, d)) return err(res, 403, 'Это не твоя сделка');
+    const csv = mediaplanCSV(d, me);
+    return send(res, 200, csv, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="mediaplan-' + String(d.client||'deal').replace(/[^a-zA-Zа-яА-Я0-9_-]/g,'_') + '.csv"'
+    });
+  }
+  if (p.match(/^\/deals\/[\w]+$/) && method === 'GET'){
+    const did = p.split('/')[2];
+    const d = DB.deals.find(function(x){ return x.id === did; });
+    if (!d) return err(res, 404, 'Нет сделки');
+    if (!canSeeDeal(me, d)) return err(res, 403, 'Это не твоя сделка');
+    return ok(res, { deal: d });
+  }
+  if (p.match(/^\/deals\/[\w]+$/) && method === 'PUT'){
+    const did = p.split('/')[2];
+    const d = DB.deals.find(function(x){ return x.id === did; });
+    if (!d) return err(res, 404, 'Нет сделки');
+    if (!canSeeDeal(me, d)) return err(res, 403, 'Не твоя сделка');
+    const b = body;
+    const gRate = Number(b.rate) || d.rate || 15;
+    const calc = computeDeal(b, gRate);
+    if (b.client) d.client = String(b.client).trim();
+    if (b.niche !== undefined) d.niche = b.niche;
+    if (b.type !== undefined) d.type = b.type;
+    if (b.budget !== undefined) d.budget = Number(b.budget)||0;
+    if (b.dealDate !== undefined) d.dealDate = b.dealDate;
+    if (b.status) d.status = b.status;
+    Object.assign(d, {
+      rate: gRate, venues: calc.venues, ownerBase: calc.ownerBase, clientVenues: calc.clientVenues,
+      services: calc.services, servicesSum: calc.servicesSum, overhead: calc.overhead,
+      refRate: calc.refRate, refSum: calc.refSum, round: calc.round,
+      clientTotal: calc.clientTotal, our: calc.our, net: calc.net, margin: calc.margin
+    });
+    log(me.login, 'DEAL_UPDATE', d.client, d.venues.length + ' площадок / клиент ' + d.clientTotal);
+    saveDB();
+    return ok(res, { deal: d });
+  }
+  if (p.match(/^\/deals\/[\w]+$/) && method === 'DELETE'){
+    const did = p.split('/')[2];
+    const d = DB.deals.find(function(x){ return x.id === did; });
+    if (!d) return err(res, 404, 'Нет сделки');
+    if (!canSeeDeal(me, d)) return err(res, 403, 'Не твоя сделка');
+    DB.deals = DB.deals.filter(function(x){ return x.id !== did; });
+    log(me.login, 'DEAL_DELETE', d.client, '');
+    saveDB();
+    return ok(res);
+  }
+
   if (p.match(/^\/deals\/[\w]+\/status$/) && method === 'POST'){
     const did = p.split('/')[2];
     const d = DB.deals.find(function(x){ return x.id === did; });
@@ -649,6 +705,109 @@ async function api(req, res, url){
   }
 
   return err(res, 404, 'Неизвестный метод: ' + p);
+}
+
+
+/* ============================ DEAL ACCESS ============================ */
+function canSeeDeal(me, d){
+  if (!d) return false;
+  if (me.role === 'founder') return true;
+  if (me.role === 'head'){
+    if (d.headId === me.id) return true;
+    const team = DB.users.filter(function(u){ return u.headId === me.id; }).map(function(u){ return u.id; });
+    return team.indexOf(d.managerId) >= 0;
+  }
+  return d.managerId === me.id;
+}
+
+/* ============================ DEAL MATH ============================ */
+const VENUE_OPTS = {
+  pin:   { n:'Закрепление поста', v:50, mode:'pct' },
+  nodl:  { n:'Без удаления',      v:60, mode:'pct' },
+  here:  { n:'Пинг @here',        v:40, mode:'pct' },
+  every: { n:'Пинг @everyone',    v:60, mode:'pct' },
+  role:  { n:'Пинг роли',         v:30, mode:'pct' },
+  chan:  { n:'Отдельный канал',   v:15, mode:'pct' },
+  urgent:{ n:'Срочный запуск',    v:20, mode:'pct' }
+};
+
+function computeDeal(b, gRate){
+  const list = Array.isArray(b.venues) ? b.venues : [];
+  const venues = list.map(function(v){
+    const price = Number(v.price) || 0;
+    const qty = Math.max(1, parseInt(v.qty, 10) || 1);
+    const base = price * qty;
+    let optPct = 0;
+    const opts = Array.isArray(v.opts) ? v.opts : [];
+    opts.forEach(function(k){ if (VENUE_OPTS[k]) optPct += VENUE_OPTS[k].v / 100; });
+    const optsSum = Math.round(base * optPct + (Number(v.customOptSum) || 0));
+    const ownerTotal = base + optsSum;
+    let rate = (v.ownRate !== null && v.ownRate !== undefined && v.ownRate !== '') ? Number(v.ownRate) : null;
+    if (rate === null || !(rate > 0) || rate >= 100) rate = gRate;
+    const clientPlace = Math.round(ownerTotal / (1 - rate/100));
+    return {
+      venueId: v.venueId || null, name: String(v.name||'Без названия'), type: v.type || 'discord',
+      niche: v.niche || '', subs: Number(v.subs)||0, reach: Number(v.reach)||0,
+      price: price, qty: qty, base: base, opts: opts, optsSum: optsSum,
+      ownerTotal: ownerTotal, rate: rate, clientPlace: clientPlace,
+      our: clientPlace - ownerTotal, format: v.format || '', date: v.date || ''
+    };
+  });
+  const ownerBase = venues.reduce(function(s,v){ return s + v.ownerTotal; }, 0);
+  const clientVenues = venues.reduce(function(s,v){ return s + v.clientPlace; }, 0);
+  const services = (Array.isArray(b.services) ? b.services : []).map(function(x){
+    return { name: String(x.name||'Услуга'), price: Number(x.price)||0 };
+  });
+  const servicesSum = services.reduce(function(s,x){ return s + x.price; }, 0);
+  const overhead = Number(b.overhead) || 0;
+  const refRate = Number(b.refRate) || 0;
+  const round = Number(b.round) || 0;
+  let clientTotal = clientVenues + servicesSum;
+  const our = clientVenues - ownerBase;
+  const refSum = Math.round(our * refRate / 100);
+  let net = our + servicesSum - overhead - refSum;
+  let roundDiff = 0;
+  if (round > 0){
+    const r = Math.ceil(clientTotal / round) * round;
+    roundDiff = r - clientTotal;
+    clientTotal = r;
+    net += roundDiff;
+  }
+  return {
+    venues: venues, ownerBase: ownerBase, clientVenues: clientVenues,
+    services: services, servicesSum: servicesSum, overhead: overhead,
+    refRate: refRate, refSum: refSum, round: round, roundDiff: roundDiff,
+    clientTotal: clientTotal, our: our, net: net,
+    margin: clientTotal > 0 ? net / clientTotal : 0
+  };
+}
+
+function mediaplanCSV(d, me){
+  const L = [];
+  const q = function(x){ return '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'; };
+  L.push(['МЕДИАПЛАН SGAX'].map(q).join(';'));
+  L.push(['Клиент', d.client, 'Ниша', d.niche, 'Дата', d.dealDate || new Date(d.created).toLocaleDateString('ru-RU')].map(q).join(';'));
+  L.push([]);
+  L.push(['№','Площадка','Тип','Ниша','Подписчиков','Охват поста','Формат','Допродажи','Дата выхода','Владельцу','Клиент платит'].map(q).join(';'));
+  (d.venues||[]).forEach(function(v,i){
+    L.push([i+1, v.name, v.type, v.niche, v.subs, v.reach,
+      (v.opts||[]).map(function(k){ return (VENUE_OPTS[k]||{}).n || k; }).join(', '),
+      v.optsSum || 0, v.date || '', v.ownerTotal || 0, v.clientPlace || 0].map(q).join(';'));
+  });
+  L.push([]);
+  L.push(['','','','','','','','','Сумма владельцам', d.ownerBase].map(q).join(';'));
+  (d.services||[]).forEach(function(s){ L.push(['','Услуга','','','','','','',s.name, s.price].map(q).join(';')); });
+  if (d.servicesSum) L.push(['','','','','','','','','Услуги итого', d.servicesSum].map(q).join(';'));
+  if (d.overhead) L.push(['','','','','','','','','Прочие расходы', d.overhead].map(q).join(';'));
+  L.push(['','','','','','','','','КЛИЕНТ ПЛАТИТ', d.clientTotal].map(q).join(';'));
+  L.push([]);
+  L.push(['Ставка SGAX', (d.rate||0) + '%'].map(q).join(';'));
+  if (me.role === 'founder' || me.role === 'head'){
+    L.push(['Наш доход (внутреннее)', d.net].map(q).join(';'));
+  }
+  L.push([]);
+  L.push(['Владельцам платим вперёд, до публикации. SGAX — агент площадок.'].map(q).join(';'));
+  return '\uFEFF' + L.join('\r\n');
 }
 
 /* ============================ VIEW MODELS ============================ */

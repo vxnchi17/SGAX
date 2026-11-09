@@ -228,7 +228,7 @@ function titleOf(v){
 function render(){
   if (typeof monitorTimer !== 'undefined' && monitorTimer && VIEW !== 'monitor'){ clearInterval(monitorTimer); monitorTimer = null; }
   renderShell();
-  var c = $('content');
+  var c = $('dash');
   c.innerHTML = '<div class="wrap"><div class="empty">Загрузка…</div></div>';
   if (VIEW === 'dash') return viewDash();
   if (VIEW === 'deals') return viewDeals();
@@ -253,7 +253,7 @@ function logoSVG(){
 /* ================= DASH ================= */
 function viewDash(){
   api('/dashboard').then(function(j){
-    if (!j.ok) return $('content').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
+    if (!j.ok) return $('dash').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
     var k = j.kpi, h = '<div class="wrap">';
     h += '<div class="page-h"><div><h2>'+greet()+'</h2><p>'+roleMeta(ME.role).e+' '+esc(ME.role==='founder'?'Полный контроль системы':'Твои показатели')+'</p></div><div class="sp"></div>'+
       '<button class="btn ghost sm" id="dRefresh">↻ Обновить</button></div>';
@@ -306,7 +306,7 @@ function viewDash(){
     h += '</tbody></table></div></div>';
 
     h += '</div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     $('dRefresh').onclick = render;
 
     // обновляем бейджи
@@ -340,18 +340,20 @@ function viewDeals(){
     var deals = res[0].deals || [], venues = res[1].venues || [];
     CACHE.deals = deals; CACHE.venues = venues;
     var h = '<div class="wrap">';
-    h += '<div class="page-h"><div><h2>Сделки</h2><p>Кто нашёл клиента — тот и закреплён менеджером. Площадки берутся из базы.</p></div><div class="sp"></div>'+
-      '<button class="btn" id="dNew">+ Новая сделка</button></div>';
-    var totalNet = deals.reduce(function(s,d){ return s + (d.net||d.our||0); },0);
+    h += '<div class="page-h"><div><h2>Сделки</h2><p>Пакет собирается из базы площадок. Цена считается по каждой площадке и по всему пакету.</p></div><div class="sp"></div>'+
+      '<button class="btn" id="dNew">+ Собрать пакет</button></div>';
+    var won = deals.filter(function(d){ return d.status==='paid'||d.status==='done'; });
+    var totalNet = won.reduce(function(s,d){ return s + (d.net||0); },0);
+    var sumClient = deals.reduce(function(s,d){ return s + (d.clientTotal||0); },0);
     h += '<div class="grid g4" style="margin-bottom:14px">'+
       kpi('Всего сделок', deals.length, '', '')+
-      kpi('Закрыто', deals.filter(function(d){return d.status==='paid'||d.status==='done';}).length, '', 'acc')+
-      kpi('Наш доход', rub(totalNet), 'по всем сделкам', 'gold')+
-      kpi('Средний чек', deals.length ? rub(deals.reduce(function(s,d){return s+(d.clientTotal||0);},0)/deals.length) : '—', '', '')+
+      kpi('Закрыто', won.length, 'оплачено/закрыто', 'acc')+
+      kpi('Оборот пакетов', rub(sumClient), 'сумма клиентов', '')+
+      kpi('Наш доход', rub(totalNet), 'по закрытым', 'gold')+
       '</div>';
 
-    h += '<div class="card pad0"><div class="tw"><table><thead><tr><th>Клиент</th><th>Ниша</th><th class="num">Площадок</th><th class="num">Ставка</th><th class="num">Владельцам</th><th class="num">Клиент платит</th><th class="num">Нам</th><th>Статус</th><th></th></tr></thead><tbody>';
-    if (!deals.length) h += '<tr><td colspan="9"><div class="empty"><div class="ee">🤝</div>Сделок пока нет — создай первую</div></td></tr>';
+    h += '<div class="card pad0"><div class="tw"><table><thead><tr><th>Клиент</th><th>Ниша</th><th class="num">Площадок</th><th class="num">Ставка</th><th class="num">Владельцам</th><th class="num">Клиент платит</th><th class="num">Нам</th><th>Статус</th><th>Действия</th></tr></thead><tbody>';
+    if (!deals.length) h += '<tr><td colspan="9"><div class="empty"><div class="ee">📐</div>Сделок ещё нет — собери первый пакет</div></td></tr>';
     deals.forEach(function(d){
       h += '<tr><td><b>'+esc(d.client)+'</b>'+(d.type?'<div class="login-badge">'+esc(d.type)+'</div>':'')+'</td>'+
         '<td><span class="tag n">'+esc(d.niche||'—')+'</span></td>'+
@@ -359,90 +361,530 @@ function viewDeals(){
         '<td class="num">'+d.rate+'%</td>'+
         '<td class="num muted">'+rub(d.ownerBase)+'</td>'+
         '<td class="num">'+rub(d.clientTotal)+'</td>'+
-        '<td class="num" style="color:var(--acc2);font-weight:800">'+rub(d.our)+'</td>'+
+        '<td class="num" style="color:var(--acc2);font-weight:800">'+rub(d.net)+'</td>'+
         '<td>'+dealTag(d.status)+'</td>'+
-        '<td><select data-dst="'+d.id+'" style="background:#0a0c12;color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-size:12px">'+
-          ['lead','negotiation','confirmed','paid','done','lost'].map(function(s){ return '<option value="'+s+'"'+(d.status===s?' selected':'')+'>'+({lead:'лид',negotiation:'переговоры',confirmed:'подтверждена',paid:'оплачена',done:'закрыта',lost:'отказ'})[s]+'</option>'; }).join('')+
-        '</select></td></tr>';
+        '<td class="row" style="gap:5px">'+
+          '<button class="btn ghost sm" data-open="'+d.id+'">Открыть</button>'+
+          '<select data-dst="'+d.id+'" style="background:#0a0c12;color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:5px 6px;font-size:11.5px">'+
+            ['lead','negotiation','confirmed','paid','done','lost'].map(function(st){ return '<option value="'+st+'"'+(d.status===st?' selected':'')+'>'+({lead:'лид',negotiation:'переговоры',confirmed:'подтверждена',paid:'оплачена',done:'закрыта',lost:'отказ'})[st]+'</option>'; }).join('')+
+          '</select></td></tr>';
     });
     h += '</tbody></table></div></div></div>';
-    $('content').innerHTML = h;
-    $('dNew').onclick = function(){ dealModal(venues); };
-    $('content').querySelectorAll('[data-dst]').forEach(function(sel){
+    $('dash').innerHTML = h;
+    $('dNew').onclick = function(){ W.confirm = false; wizardOpen(venues); };
+    $('dash').querySelectorAll('[data-open]').forEach(function(b){
+      b.onclick = function(){
+        api('/deals/'+b.dataset.open).then(function(j){
+          if (!j.ok) return toast(j.error,true);
+          W.confirm = true; wizardOpen(venues, j.deal);
+        });
+      };
+    });
+    $('dash').querySelectorAll('[data-dst]').forEach(function(sel){
       sel.onchange = function(){
         api('/deals/'+sel.dataset.dst+'/status','POST',{ status: sel.value }).then(function(j){
-          if (j.ok){ toast('Статус обновлён: '+sel.value); render(); } else toast(j.error,true);
+          if (j.ok){ toast('Статус обновлён'); render(); } else toast(j.error,true);
         });
       };
     });
   });
 }
 
-function dealModal(venues){
-  var st = { client:'', niche:'RUST', type:'Игра', rate:15, pick:{}, srv:0, over:0, status:'lead' };
-  var niches = ['RUST','Гейминг','Крипта / Web3','IT / разработка','Аниме','Мемы','Учёба','Бизнес','Другое'];
-  var types = ['Telegram Mini App','Игра','Сервис','Магазин','Инфопродукт','Канал','Другое'];
-  function body(){
-    var h = '';
-    h += '<div class="f"><label>Клиент</label><input id="mClient" value="'+esc(st.client)+'" placeholder="Название или ник"></div>';
-    h += '<div class="f"><label>Ниша</label><div class="chip-pick">'+niches.map(function(n){ return '<button data-n="'+esc(n)+'" class="'+(st.niche===n?'on':'')+'">'+n+'</button>'; }).join('')+'</div></div>';
-    h += '<div class="f"><label>Что рекламируем</label><div class="chip-pick">'+types.map(function(n){ return '<button data-t="'+esc(n)+'" class="'+(st.type===n?'on':'')+'">'+n+'</button>'; }).join('')+'</div></div>';
-    h += '<div class="f"><label>Площадки из базы</label>';
-    var list = venues.filter(function(v){ return !st.niche || v.niche === st.niche || true; });
-    if (!list.length) h += '<div class="hint">В базе нет площадок — добавь на странице «Площадки».</div>';
-    h += '<div style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px">';
-    list.forEach(function(v){
-      var on = !!st.pick[v.id];
-      h += '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid rgba(35,40,56,.5);font-size:12.5px;cursor:pointer">'+
-        '<input type="checkbox" data-pick="'+v.id+'" '+(on?'checked':'')+' style="accent-color:#6d5efc">'+
-        '<span style="flex:1"><b>'+esc(v.name)+'</b> <span class="dim">· '+esc(v.niche)+' · '+rub0(v.subs)+' подп.</span></span>'+
-        '<span class="muted">'+rub(v.price)+'</span></label>';
-    });
-    h += '</div></div>';
-    var ownerBase = 0;
-    Object.keys(st.pick).forEach(function(k){ if(st.pick[k]){ var v = venues.filter(function(x){return x.id===k;})[0]; if(v) ownerBase += Number(v.price)||0; } });
-    h += '<div class="grid g2"><div class="f"><label>Ставка</label><div class="chip-pick"><button data-rate="15" class="'+(st.rate===15?'on':'')+'">эксклюзив 15%</button><button data-rate="35" class="'+(st.rate===35?'on':'')+'">стандарт 35%</button></div></div>'+
-      '<div class="f"><label>Статус</label><select id="mStatus">'+['lead','negotiation','confirmed','paid','done','lost'].map(function(s){ return '<option value="'+s+'"'+(st.status===s?' selected':'')+'>'+s+'</option>'; }).join('')+'</select></div></div>';
-    h += '<div class="grid g2"><div class="f"><label>Услуги, ₽</label><input type="number" id="mSrv" value="'+(st.srv||'')+'" placeholder="креатив, текст…"></div>'+
-      '<div class="f"><label>Прочие расходы, ₽</label><input type="number" id="mOver" value="'+(st.over||'')+'" placeholder="0"></div></div>';
-    var clientTotal = ownerBase / (1 - st.rate/100);
-    var net = clientTotal - ownerBase + (Number(st.srv)||0) - (Number(st.over)||0);
-    h += '<div class="card" style="background:var(--card2);margin-top:6px"><div class="row" style="justify-content:space-between;font-size:13px"><span class="muted">Владельцам</span><b>'+rub(ownerBase)+'</b></div>'+
-      '<div class="row" style="justify-content:space-between;font-size:13px;margin-top:5px"><span class="muted">Клиент платит</span><b>'+rub(clientTotal + (Number(st.srv)||0))+'</b></div>'+
-      '<div class="row" style="justify-content:space-between;font-size:13px;margin-top:5px"><span class="muted">Нам чистыми</span><b style="color:var(--acc2)">'+rub(net)+'</b></div></div>';
+/* ================= WIZARD (калькулятор v6 внутри CRM) ================= */
+var OPTS = [
+  { k:'pin',    n:'Закрепление поста', d:'Висит сверху ещё 24 часа',      v:50 },
+  { k:'nodl',   n:'Без удаления',      d:'Остаётся в истории навсегда',   v:60 },
+  { k:'here',   n:'Пинг @here',        d:'Уведомление активным',          v:40 },
+  { k:'every',  n:'Пинг @everyone',    d:'Уведомление всем участникам',   v:60 },
+  { k:'role',   n:'Пинг роли',         d:'Только выбранная роль',         v:30 },
+  { k:'chan',   n:'Отдельный канал',   d:'В своём канале, не в общем',    v:15 },
+  { k:'urgent', n:'Срочный запуск',    d:'Публикация в течение 24 часов', v:20 }
+];
+var SVC_LIB = [
+  { name:'Редактура поста', price:2000 }, { name:'Текст с нуля', price:4000 },
+  { name:'Нативная подача', price:6000 }, { name:'Креатив / баннер', price:6000 },
+  { name:'Видео 15 сек', price:15000 }, { name:'Медиаплан и стратегия', price:8000 },
+  { name:'Рубрика (мес)', price:25000 }, { name:'Бриф и аналитика', price:5000 }
+];
+var W = { step:1, active:null, confirm:false, opened:null, data:null };
+
+function wBlank(){
+  return { client:'', niche:'', type:'', budget:'', dealDate:'', rate:15,
+    venues:[], services:[], overhead:0, refRate:0, round:0, status:'lead', dealId:null };
+}
+function wNormalize(d){
+  var o = wBlank();
+  Object.keys(o).forEach(function(k){ if (d[k] !== undefined) o[k] = d[k]; });
+  o.venues = (d.venues||[]).map(function(v){
+    return { id:'v'+Math.random().toString(36).slice(2,8), venueId:v.venueId||null, name:v.name||'', type:v.type||'discord',
+      niche:v.niche||'', subs:v.subs||0, reach:v.reach||0, price:v.price||0, qty:v.qty||1,
+      opts:v.opts||[], customOptSum:v.customOptSum||0, ownRate:v.ownRate===undefined?null:v.ownRate,
+      format:v.format||'', date:v.date||'' };
+  });
+  o.services = (d.services||[]).map(function(x){ return { name:x.name||'', price:x.price||0 }; });
+  return o;
+}
+
+function wizardOpen(venues, deal){
+  W.venues = venues;
+  W.data = deal ? wNormalize(deal) : wBlank();
+  W.step = 1; W.active = null; W.opened = null;
+  $('dash').classList.remove('on');
+  $('wizard').classList.add('on');
+  wRender();
+}
+function wizardClose(){
+  $('wizard').classList.remove('on');
+  $('dash').classList.add('on');
+  saveWizard(false);
+  render();
+}
+
+/* расчёт на клиенте — 1:1 с сервером */
+function wCalc(){
+  var s = W.data;
+  var rate = Number(s.rate) || 15;
+  var venues = s.venues.map(function(v){
+    var price = Number(v.price)||0, qty = Math.max(1, parseInt(v.qty,10)||1);
+    var base = price*qty, optPct = 0;
+    (v.opts||[]).forEach(function(k){ var o = OPTS.filter(function(x){return x.k===k;})[0]; if(o) optPct += o.v/100; });
+    var optsSum = Math.round(base*optPct + (Number(v.customOptSum)||0));
+    var ownerTotal = base + optsSum;
+    var r = (v.ownRate!==null && v.ownRate!==undefined && v.ownRate!=='') ? Number(v.ownRate) : rate;
+    if (!(r>0) || r>=100) r = rate;
+    var clientPlace = Math.round(ownerTotal/(1-r/100));
+    return { price:price, qty:qty, base:base, optsSum:optsSum, ownerTotal:ownerTotal, rate:r, clientPlace:clientPlace, our:clientPlace-ownerTotal };
+  });
+  var ownerBase = venues.reduce(function(a,v){return a+v.ownerTotal;},0);
+  var clientVenues = venues.reduce(function(a,v){return a+v.clientPlace;},0);
+  var servicesSum = s.services.reduce(function(a,x){return a+(Number(x.price)||0);},0);
+  var overhead = Number(s.overhead)||0;
+  var refRate = Number(s.refRate)||0;
+  var round = Number(s.round)||0;
+  var our = clientVenues - ownerBase;
+  var refSum = Math.round(our*refRate/100);
+  var clientTotal = clientVenues + servicesSum;
+  var net = our + servicesSum - overhead - refSum;
+  var roundDiff = 0;
+  if (round>0){ var rr = Math.ceil(clientTotal/round)*round; roundDiff = rr-clientTotal; clientTotal = rr; net += roundDiff; }
+  var reach = s.venues.reduce(function(a,v){ return a + (Number(v.reach)||0)*(Math.max(1,parseInt(v.qty,10)||1)); },0);
+  return { venues:venues, ownerBase:ownerBase, clientVenues:clientVenues, servicesSum:servicesSum,
+    overhead:overhead, refRate:refRate, refSum:refSum, round:round, roundDiff:roundDiff,
+    clientTotal:clientTotal, our:our, net:net, reach:reach,
+    margin: clientTotal>0 ? net/clientTotal : 0, cpv: reach>0 ? clientVenues/reach : 0 };
+}
+
+var WSTEPS = [
+  { n:1, t:'Клиент',      d:'кто и что рекламируем',               ic:'👤' },
+  { n:2, t:'Площадки',    d:'список и условия',                     ic:'📡' },
+  { n:3, t:'Наш процент', d:'тариф сделки',                         ic:'％' },
+  { n:4, t:'Услуги',      d:'креатив и прочее',                     ic:'🎨' },
+  { n:5, t:'Расходы',     d:'реферал, правила',                     ic:'➗' },
+  { n:6, t:'Итог',        d:'цена и сохранение',                    ic:'💎' }
+];
+
+function wRender(){
+  var c = wCalc();
+  var h = '';
+  h += '<div class="wiz-head"><div class="wh-l"><button class="btn ghost sm" id="wClose">← Выйти</button>'+
+    '<div><div class="wh-t">'+(W.data.dealId?'Сделка: '+esc(W.data.client):'Новый пакет')+'</div>'+
+    '<div class="wh-s">'+(W.data.venues.length?W.data.venues.length+' площадок':'пока пусто')+'</div></div></div>'+
+    '<div class="sp"></div>'+
+    '<div class="wh-chips">'+
+      '<div class="whc"><span>Клиент платит</span><b>'+rub(c.clientTotal)+'</b></div>'+
+      '<div class="whc"><span>Владельцам</span><b style="color:var(--owner)">'+rub(c.ownerBase)+'</b></div>'+
+      '<div class="whc"><span>Нам</span><b style="color:var(--acc2)">'+rub(c.net)+'</b></div>'+
+      '<div class="whc"><span>Маржа</span><b>'+(c.clientTotal>0?(c.margin*100).toFixed(1)+'%':'—')+'</b></div>'+
+    '</div></div>';
+
+  h += '<div class="wiz-body"><div class="wiz-side">';
+  WSTEPS.forEach(function(st){
+    var done = wStepDone(st.n);
+    h += '<button class="wstep'+(W.step===st.n?' on':'')+(done&&W.step!==st.n?' done':'')+'" data-ws="'+st.n+'">'+
+      '<div class="wsn">'+(done&&W.step!==st.n?'✓':st.ic)+'</div>'+
+      '<div><div class="wst">'+st.t+'</div><div class="wsd">'+st.d+'</div></div></button>';
+  });
+  h += '</div><div class="wiz-main">'+wStepBody()+'</div></div>';
+
+  h += '<div class="wiz-foot"><button class="btn ghost" id="wPrev"'+(W.step===1?' disabled':'')+'>← Назад</button>'+
+    '<div class="sp"></div>'+
+    '<span class="wiz-hint">шаг '+W.step+' из 6</span>'+
+    '<div class="sp"></div>'+
+    (W.step<6 ? '<button class="btn" id="wNext">Далее →</button>'
+              : '<button class="btn ok" id="wSave">'+(W.data.dealId?'Сохранить изменения':'Создать сделку')+'</button>')+
+    '</div>';
+
+  $('wizard').innerHTML = h;
+  $('wClose').onclick = wizardClose;
+  var pv = $('wPrev'), nx = $('wNext');
+  if (pv) pv.onclick = function(){ W.step = Math.max(1,W.step-1); W.active=null; wRender(); };
+  if (nx) nx.onclick = function(){ wStepNext(); };
+  var sv = $('wSave'); if (sv) sv.onclick = wSave;
+  $('wizard').querySelectorAll('[data-ws]').forEach(function(b){
+    b.onclick = function(){ W.step = parseInt(b.dataset.ws,10); W.active=null; wRender(); };
+  });
+  wBind();
+}
+
+function wStepDone(n){
+  var s = W.data;
+  if (n===1) return !!(s.client && s.niche);
+  if (n===2) return s.venues.length>0 && s.venues.every(function(v){ return v.name && Number(v.price)>0; });
+  return n<=5;
+}
+
+/* ---------- STEP BODIES ---------- */
+function wStepBody(){
+  var s = W.data;
+  if (W.step===1){
+    var niches = ['RUST','Гейминг','Крипта / Web3','IT / разработка','Аниме','Мемы','Учёба','Бизнес','Другое'];
+    var types = ['Telegram Mini App','Игра','Сервис','Магазин','Инфопродукт','Канал','Другое'];
+    var h = '<div class="wp-title">Шаг 1. Клиент</div><div class="wp-sub">Что рекламируем и в какой нише — от этого зависит, из каких площадок собирать пакет.</div>';
+    h += '<div class="wcard">';
+    h += wField('Название клиента или ник','<input id="wClient" value="'+esc(s.client)+'" placeholder="RustLand / @manager">');
+    h += '<div class="wf"><label>Что рекламируем</label><div class="chip-pick">'+types.map(function(t){ return '<button data-type="'+esc(t)+'" class="'+(s.type===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div></div>';
+    h += '<div class="wf"><label>Ниша — от неё зависит состав пакета</label><div class="chip-pick">'+niches.map(function(t){ return '<button data-niche="'+esc(t)+'" class="'+(s.niche===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div>'+
+      '<div class="hint">Пакет собирается из площадок одной тематики. Меньше 3 площадок в нише — пакет не продаётся.</div></div>';
+    h += '<div class="grid g2"><div class="wf"><label>Бюджет клиента, ₽</label><input type="number" id="wBudget" value="'+(s.budget||'')+'" placeholder="необязательно"></div>'+
+      '<div class="wf"><label>Дата сделки</label><input type="date" id="wDate" value="'+(s.dealDate||'')+'"></div></div>';
+    h += '</div>';
     return h;
   }
-  modal('Новая сделка', body(), [
+  if (W.step===2){
+    if (W.active){
+      var v = s.venues.filter(function(x){ return x.id===W.active; })[0];
+      if (!v){ W.active=null; return wStepBody(); }
+      var idx = s.venues.indexOf(v)+1;
+      var c = wCalc().venues[s.venues.indexOf(v)];
+      var hh = '<button class="btn ghost sm" id="wBackList">← К списку площадок</button>';
+      hh += '<div class="wp-title" style="margin-top:12px">Площадка '+idx+'. '+(v.name?esc(v.name):'без названия')+'</div>';
+      hh += '<div class="wp-sub">'+esc(v.niche||s.niche||'—')+' · '+(v.type||'discord')+' · '+rub0(v.subs)+' подписчиков</div>';
+      // блок 1
+      hh += wBlock(1,'Что это за площадка',[
+        wField('Название','<input id="vName" value="'+esc(v.name)+'" placeholder="RUST • Сервер #1">'),
+        '<div class="wf"><label>Тип</label><div class="chip-pick">'+['discord','telegram','tma','vk'].map(function(t){ return '<button data-vtype="'+t+'" class="'+(v.type===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div></div>',
+        '<div class="wf"><label>Ниша</label><div class="chip-pick">'+['RUST','Гейминг','Крипта / Web3','IT / разработка','Аниме','Мемы','Учёба','Бизнес'].map(function(t){ return '<button data-vniche="'+esc(t)+'" class="'+(v.niche===t?'on':'')+'">'+t+'</button>'; }).join('')+'</div></div>'
+      ].join(''));
+      // блок 2
+      hh += wBlock(2,'Аудитория',[
+        '<div class="grid g2"><div class="wf"><label>Подписчиков</label><input type="number" id="vSubs" value="'+(v.subs||'')+'"></div>'+
+        '<div class="wf"><label>Охват одного поста</label><input type="number" id="vReach" value="'+(v.reach||'')+'"></div></div>',
+        '<button class="btn ghost sm" id="vReach30">Оценить охват как 30% от подписчиков</button>'
+      ].join(''));
+      // блок 3
+      hh += wBlock(3,'Условия владельца',[
+        '<div class="grid g2"><div class="wf"><label>Цена владельца за 1 размещение, ₽</label><input type="number" id="vPrice" value="'+(v.price||'')+'"></div>'+
+        '<div class="wf"><label>Сколько размещений</label><input type="number" id="vQty" value="'+(v.qty||1)+'" min="1"></div></div>',
+        '<div class="wsum"><span>Владельцу за всё</span><b>'+rub(c.ownerTotal)+'</b></div>'
+      ].join(''));
+      // блок 4
+      var optRows = OPTS.map(function(o){
+        var on = (v.opts||[]).indexOf(o.k)>=0;
+        return '<label class="wopt'+(on?' on':'')+'"><input type="checkbox" data-opt="'+o.k+'" '+(on?'checked':'')+'>'+
+          '<div style="flex:1"><b>'+o.n+'</b><div class="dim" style="font-size:11.5px">'+o.d+'</div></div>'+
+          '<span class="woptp">+'+o.v+'%</span></label>';
+      }).join('');
+      hh += wBlock(4,'Допродажи',[ optRows,
+        '<div class="wf" style="margin-top:10px"><label>Своя допродажа суммой, ₽</label><input type="number" id="vCustom" value="'+(v.customOptSum||'')+'" placeholder="0"></div>'
+      ].join(''));
+      // блок 5
+      hh += wBlock(5,'Наша ставка',[
+        '<div class="wf"><div class="chip-pick">'+
+          '<button data-vrate="global" class="'+(v.ownRate===null?'on':'')+'">Общая ('+s.rate+'%)</button>'+
+          '<button data-vrate="own" class="'+(v.ownRate!==null?'on':'')+'">Своя</button></div></div>',
+        (v.ownRate!==null ? '<div class="wf"><label>Ставка для этой площадки, %</label><input type="number" id="vOwnRate" value="'+(v.ownRate||'')+'"></div>' : '')
+      ].join(''));
+      // итог по площадке
+      hh += '<div class="wcard" style="margin-top:14px;background:var(--card2)">'+
+        '<div class="wsum"><span>Владельцу</span><b style="color:var(--owner)">'+rub(c.ownerTotal)+'</b></div>'+
+        '<div class="wsum"><span>Клиент платит за эту площадку</span><b>'+rub(c.clientPlace)+'</b></div>'+
+        '<div class="wsum"><span>Ставка</span><b>'+c.rate+'%</b></div>'+
+        '<div class="wsum"><span>Нам с площадки</span><b style="color:var(--acc2)">'+rub(c.our)+'</b></div>'+
+        '<div style="margin-top:12px" class="row"><button class="btn ok sm" id="wBackList2">Готово, к списку</button>'+
+        '<button class="btn ghost sm" id="wDelVenue" style="color:var(--red);border-color:rgba(255,92,122,.35)">Удалить площадку</button></div></div>';
+      return hh;
+    }
+    // список площадок
+    var h2 = '<div class="wp-title">Шаг 2. Площадки</div><div class="wp-sub">Список пакета. Нажми на площадку — откроются её условия, допродажи и ставка.</div>';
+    h2 += '<div class="card pad0" style="margin-bottom:12px"><div class="tw"><table><tbody>';
+    if (!s.venues.length) h2 += '<tr><td><div class="empty" style="padding:26px"><div class="ee">📡</div>Пакет пустой. Добавь площадку из базы или создай вручную.</div></td></tr>';
+    s.venues.forEach(function(v,i){
+      var cc = wCalc().venues[i];
+      h2 += '<tr style="cursor:pointer" data-vopen="'+v.id+'">'+
+        '<td style="width:32px"><div class="vnum">'+(i+1)+'</div></td>'+
+        '<td><b>'+esc(v.name||'без названия')+'</b><div class="login-badge">'+esc(v.type||'discord')+' · охват '+rub0(v.reach)+'</div></td>'+
+        '<td>'+(Number(v.price)>0?'<span class="tag g">в пакете</span>':'<span class="tag y">нет цены</span>')+'</td>'+
+        '<td class="num muted">'+rub(cc.ownerTotal)+'<div class="login-badge">владельцу</div></td>'+
+        '<td class="num">'+rub(cc.clientPlace)+'<div class="login-badge">клиенту</div></td>'+
+        '<td style="width:24px;text-align:right;color:var(--dim);font-size:18px">›</td></tr>';
+    });
+    h2 += '</tbody></table></div></div>';
+    h2 += '<div class="row"><button class="btn" id="wAddFromBase">+ Из базы площадок</button>'+
+      '<button class="btn ghost" id="wAddManual">+ Вручную</button>'+
+      (s.venues.length>=3?'':'<span class="pill" style="color:var(--warn)">минимум 3 площадки для пакета</span>')+'</div>';
+    return h2;
+  }
+  if (W.step===3){
+    var h3 = '<div class="wp-title">Шаг 3. Наш процент</div><div class="wp-sub">Ставка применяется ко всем площадкам, где не задана своя.</div>';
+    h3 += '<div class="grid g2" style="margin-bottom:14px">'+
+      wRateCard(15,'Эксклюзив','Все размещения по площадкам идут через нас. Владелец не продаёт нишу сам.', s.rate===15)+
+      wRateCard(35,'Стандарт','Владелец размещает и свои прямые продажи параллельно. Эксклюзива нет.', s.rate===35)+
+      '</div>';
+    h3 += '<div class="wcard"><div class="wf"><label>Своя ставка, % (5–50)</label>'+
+      '<input type="range" id="wRateR" min="5" max="50" step="1" value="'+s.rate+'" style="width:100%;accent-color:#6d5efc">'+
+      '<div class="row" style="justify-content:space-between"><span class="dim">5%</span><b id="wRateVal" style="font-size:19px;color:var(--acc2)">'+s.rate+'%</b><span class="dim">50%</span></div></div>';
+    var c3 = wCalc();
+    h3 += '<div class="wsum"><span>Владельцам при этой ставке</span><b style="color:var(--owner)">'+rub(c3.ownerBase)+'</b></div>'+
+      '<div class="wsum"><span>Клиент платит</span><b>'+rub(c3.clientVenues)+'</b></div>'+
+      '<div class="wsum"><span>Нам</span><b style="color:var(--acc2)">'+rub(c3.our)+'</b></div></div>';
+    h3 += '<div class="hint">15% даёт наценку +17,6% к сумме владельцев, 35% — +53,8%. Владельцы всегда получают свои цены целиком.</div>';
+    return h3;
+  }
+  if (W.step===4){
+    var h4 = '<div class="wp-title">Шаг 4. Услуги</div><div class="wp-sub">Креатив, тексты, аналитика. Это чистая маржа сверх пакета.</div>';
+    h4 += '<div class="wcard"><div class="card-h"><h3>Услуги в сделке</h3><div class="sp"></div><button class="btn ghost sm" id="wSvcLib">+ Из списка готовых</button><button class="btn ghost sm" id="wSvcAdd">+ Своя</button></div>';
+    h4 += '<div class="tw"><table><tbody>';
+    if (!s.services.length) h4 += '<tr><td><div class="empty" style="padding:20px">Услуг нет — только пакет площадок</div></td></tr>';
+    s.services.forEach(function(x,i){
+      h4 += '<tr><td><input value="'+esc(x.name)+'" data-svcname="'+i+'" style="background:#0a0c12;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:7px 9px;width:100%"></td>'+
+        '<td style="width:130px"><input type="number" value="'+(x.price||'')+'" data-svcprice="'+i+'" style="background:#0a0c12;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:7px 9px;width:100%;text-align:right"></td>'+
+        '<td style="width:36px"><button class="btn ghost sm" data-svcdel="'+i+'" style="color:var(--red)">×</button></td></tr>';
+    });
+    h4 += '</tbody></table></div>';
+    h4 += '<div class="wsum" style="margin-top:12px"><span>Услуги итого</span><b>'+rub(wCalc().servicesSum)+'</b></div></div>';
+    return h4;
+  }
+  if (W.step===5){
+    var c5 = wCalc();
+    var h5 = '<div class="wp-title">Шаг 5. Расходы и правила</div><div class="wp-sub">Что вычитается из нашего дохода и как округляется цена клиенту.</div>';
+    h5 += '<div class="wcard">';
+    h5 += '<div class="grid g2"><div class="wf"><label>Прочие расходы, ₽</label><input type="number" id="wOver" value="'+(s.overhead||'')+'" placeholder="0"><div class="hint">Подрядчики, транспорт, мелочи</div></div>'+
+      '<div class="wf"><label>Реферал, % от нашего дохода</label><input type="number" id="wRef" value="'+(s.refRate||'')+'" placeholder="0"><div class="hint">Если клиента привёл кто-то со стороны</div></div></div>';
+    h5 += '<div class="wf"><label>Округление цены клиенту</label><div class="chip-pick">'+
+      [[0,'без округления'],[100,'до 100 ₽'],[500,'до 500 ₽'],[1000,'до 1 000 ₽']].map(function(r){
+        return '<button data-round="'+r[0]+'" class="'+(Number(s.round)===r[0]?'on':'')+'">'+r[1]+'</button>';
+      }).join('')+'</div></div>';
+    h5 += '<div class="hr"></div><b style="font-size:13px">Пороги, при которых пакет не берём</b>';
+    h5 += '<div class="wsum" style="margin-top:8px"><span>Минимальный доход с пакета</span><b>3 000 ₽</b></div>'+
+      '<div class="wsum"><span>Минимум площадок в пакете</span><b>3</b></div>'+
+      '<div class="wsum"><span>Наш доход сейчас</span><b style="color:'+(c5.net>=3000?'var(--acc2)':'var(--red)')+'">'+rub(c5.net)+'</b></div>';
+    if (c5.net<3000) h5 += '<div class="hint" style="color:var(--warn)">⚠️ Доход ниже порога — такой пакет по правилам не берём. Добавь площадок или подними ставку.</div>';
+    h5 += '</div>';
+    return h5;
+  }
+  // STEP 6 — итог
+  var c6 = wCalc();
+  var h6 = '<div class="wp-title">Шаг 6. Итог</div><div class="wp-sub">Проверь цифры и сохрани сделку.</div>';
+  h6 += '<div class="whero"><div class="whl">Клиент платит</div><div class="whv">'+rub(c6.clientTotal)+'</div>'+
+    '<div class="whs">'+(s.venues.length)+' площадок · '+(s.services.length? s.services.length+' услуг · ':'')+'ставка '+s.rate+'%</div></div>';
+  h6 += '<div class="grid g3" style="margin-bottom:14px">'+
+    kpi('Владельцам', rub(c6.ownerBase), 'получают целиком', '')+
+    kpi('Нам', rub(c6.net), 'после расходов', 'acc')+
+    kpi('Маржа', (c6.clientTotal>0?(c6.margin*100).toFixed(1)+'%':'—'), 'от чека клиента', 'gold')+'</div>';
+  h6 += '<div class="wcard"><div class="card-h"><h3>Разбор по площадкам</h3></div><div class="tw"><table><thead><tr><th>Площадка</th><th class="num">Владельцу</th><th class="num">Ставка</th><th class="num">Клиенту</th><th class="num">Нам</th></tr></thead><tbody>';
+  s.venues.forEach(function(v,i){
+    var cc = c6.venues[i];
+    h6 += '<tr><td>'+esc(v.name||'—')+'</td><td class="num muted">'+rub(cc.ownerTotal)+'</td><td class="num">'+cc.rate+'%</td>'+
+      '<td class="num">'+rub(cc.clientPlace)+'</td><td class="num" style="color:var(--acc2)">'+rub(cc.our)+'</td></tr>';
+  });
+  h6 += '</tbody></table></div></div>';
+  // проверки
+  var checks = [
+    [s.venues.length>0,'в пакете есть площадки'],
+    [s.venues.length>=3,'минимум 3 площадки ('+s.venues.length+')'],
+    [s.venues.every(function(v){return Number(v.price)>0;}),'у всех площадок есть цена'],
+    [s.venues.every(function(v){return Number(v.reach)>0;}),'у всех указан охват'],
+    [!!s.niche,'выбрана ниша'],
+    [c6.net>=3000,'доход выше порога 3 000 ₽']
+  ];
+  h6 += '<div class="wcard" style="margin-top:14px"><div class="card-h"><h3>Проверки</h3></div>';
+  checks.forEach(function(x){
+    h6 += '<div class="row" style="padding:5px 0;font-size:12.5px"><span style="color:'+(x[0]?'var(--green)':'var(--warn)')+'">'+(x[0]?'✓':'⚠')+'</span><span class="'+(x[0]?'':'muted')+'">'+x[1]+'</span></div>';
+  });
+  h6 += '</div>';
+  h6 += '<div class="row" style="margin-top:14px"><button class="btn ghost" id="wExport">Скачать медиаплан CSV</button>'+
+    '<button class="btn ghost" id="wPrint">Печать</button>'+
+    (s.dealId?'<button class="btn danger sm" id="wDelete">Удалить сделку</button>':'')+'</div>';
+  return h6;
+}
+
+function wField(label, input){ return '<div class="wf"><label>'+label+'</label>'+input+'</div>'; }
+function wBlock(n, title, body){
+  var open = (W.opened===n);
+  return '<div class="wblock'+(open?' open':'')+'" data-block="'+n+'">'+
+    '<div class="wbh"><div class="wbn">'+n+'</div><div style="flex:1"><b>'+title+'</b></div><span class="wchev">▶</span></div>'+
+    '<div class="wbb">'+body.join('')+'</div></div>';
+}
+function wRateCard(val, title, sub, on){
+  return '<div class="wrate'+(on?' on':'')+'" data-rate="'+val+'">'+
+    '<div class="wrt">'+val+'%</div><div class="wrn">'+title+'</div><div class="wrs">'+sub+'</div></div>';
+}
+
+/* ---------- bindings ---------- */
+function wBind(){
+  var s = W.data;
+  // step1
+  var el;
+  if ((el=$('wClient'))) el.oninput=function(){ s.client=el.value; };
+  if ((el=$('wBudget'))) el.oninput=function(){ s.budget=el.value; };
+  if ((el=$('wDate'))) el.onchange=function(){ s.dealDate=el.value; };
+  document.querySelectorAll('[data-type]').forEach(function(b){ b.onclick=function(){ s.type=b.dataset.type; wRender(); }; });
+  document.querySelectorAll('[data-niche]').forEach(function(b){ b.onclick=function(){ s.niche=b.dataset.niche; wRender(); }; });
+
+  // step2 list
+  document.querySelectorAll('[data-vopen]').forEach(function(tr){ tr.onclick=function(){ W.active=tr.dataset.vopen; W.opened=1; wRender(); }; });
+  if ((el=$('wAddManual'))) el.onclick=function(){ addVenue(null); };
+  if ((el=$('wAddFromBase'))) el.onclick=function(){ pickFromBase(); };
+  if ((el=$('wBackList'))) el.onclick=function(){ W.active=null; wRender(); };
+  if ((el=$('wBackList2'))) el.onclick=function(){ W.active=null; wRender(); };
+  if ((el=$('wDelVenue'))) el.onclick=function(){
+    W.data.venues = W.data.venues.filter(function(x){ return x.id!==W.active; });
+    W.active=null; wRender();
+  };
+  // venue detail fields
+  var v = W.active ? s.venues.filter(function(x){ return x.id===W.active; })[0] : null;
+  if (v){
+    if ((el=$('vName'))) el.oninput=function(){ v.name=el.value; };
+    if ((el=$('vSubs'))) el.oninput=function(){ v.subs=el.value; };
+    if ((el=$('vReach'))) el.oninput=function(){ v.reach=el.value; };
+    if ((el=$('vPrice'))) el.oninput=function(){ v.price=el.value; wRender(); };
+    if ((el=$('vQty'))) el.oninput=function(){ v.qty=el.value; wRender(); };
+    if ((el=$('vCustom'))) el.oninput=function(){ v.customOptSum=el.value; wRender(); };
+    if ((el=$('vOwnRate'))) el.oninput=function(){ v.ownRate=el.value; wRender(); };
+    if ((el=$('vReach30'))) el.onclick=function(){ v.reach=Math.round((Number(v.subs)||0)*0.3); wRender(); };
+    document.querySelectorAll('[data-vtype]').forEach(function(b){ b.onclick=function(){ v.type=b.dataset.vtype; wRender(); }; });
+    document.querySelectorAll('[data-vniche]').forEach(function(b){ b.onclick=function(){ v.niche=b.dataset.vniche; wRender(); }; });
+    document.querySelectorAll('[data-opt]').forEach(function(cb){ cb.onchange=function(){
+      v.opts = v.opts||[];
+      if (cb.checked){ if (v.opts.indexOf(cb.dataset.opt)<0) v.opts.push(cb.dataset.opt); }
+      else { v.opts = v.opts.filter(function(k){ return k!==cb.dataset.opt; }); }
+      wRender();
+    }; });
+    document.querySelectorAll('[data-vrate]').forEach(function(b){ b.onclick=function(){
+      v.ownRate = b.dataset.vrate==='own' ? (v.ownRate===null?15:v.ownRate) : null; wRender();
+    }; });
+    document.querySelectorAll('.wbh').forEach(function(bh){
+      bh.onclick=function(){ var n=Number(bh.parentElement.dataset.block); W.opened = (W.opened===n?null:n); wRender(); };
+    });
+  }
+  // step3
+  if ((el=$('wRateR'))) el.oninput=function(){ s.rate=Number(el.value); var d=$('wRateVal'); if(d) d.textContent=s.rate+'%'; };
+  if ((el=$('wRateR'))) el.onchange=function(){ s.rate=Number(el.value); wRender(); };
+  document.querySelectorAll('[data-rate]').forEach(function(b){ b.onclick=function(){ s.rate=Number(b.dataset.rate); wRender(); }; });
+  // step4
+  if ((el=$('wSvcAdd'))) el.onclick=function(){ s.services.push({name:'Новая услуга',price:0}); wRender(); };
+  if ((el=$('wSvcLib'))) el.onclick=function(){ svcLib(); };
+  document.querySelectorAll('[data-svcname]').forEach(function(inp){ inp.oninput=function(){ s.services[Number(inp.dataset.svcname)].name=inp.value; }; });
+  document.querySelectorAll('[data-svcprice]').forEach(function(inp){ inp.oninput=function(){ s.services[Number(inp.dataset.svcprice)].price=Number(inp.value)||0; }; });
+  document.querySelectorAll('[data-svcdel]').forEach(function(b){ b.onclick=function(){ s.services.splice(Number(b.dataset.svcdel),1); wRender(); }; });
+  // step5
+  if ((el=$('wOver'))) el.oninput=function(){ s.overhead=el.value; };
+  if ((el=$('wRef'))) el.oninput=function(){ s.refRate=el.value; };
+  document.querySelectorAll('[data-round]').forEach(function(b){ b.onclick=function(){ s.round=Number(b.dataset.round); wRender(); }; });
+  // step6
+  if ((el=$('wExport'))) el.onclick=wExport;
+  if ((el=$('wPrint'))) el.onclick=function(){ window.print(); };
+  if ((el=$('wDelete'))) el.onclick=wDelete;
+}
+
+function addVenue(fromBase){
+  var s = W.data;
+  var v = { id:'v'+Math.random().toString(36).slice(2,8), venueId: fromBase?fromBase.id:null,
+    name: fromBase?fromBase.name:'', type: fromBase?fromBase.type:'discord', niche: fromBase?fromBase.niche:(s.niche||''),
+    subs: fromBase?fromBase.subs:0, reach: fromBase?fromBase.reach:0, price: fromBase?fromBase.price:0,
+    qty:1, opts:[], customOptSum:0, ownRate:null, format:'', date:'' };
+  s.venues.push(v);
+  W.active = v.id; W.opened = 1;
+  wRender();
+}
+
+function pickFromBase(){
+  var list = W.venues.filter(function(v){
+    return !W.data.venues.some(function(x){ return x.venueId===v.id; });
+  });
+  var body = '<div class="hint" style="margin-bottom:12px">Площадки из базы. Выбери одну или несколько — цены и охваты подтянутся.</div>';
+  if (!list.length) body += '<div class="empty"><div class="ee">📡</div>Свободных площадок в базе нет. Добавь их на странице «Площадки».</div>';
+  body += '<div style="max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px">';
+  list.forEach(function(v){
+    body += '<label style="display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid rgba(35,40,56,.5);font-size:12.5px;cursor:pointer">'+
+      '<input type="checkbox" data-pickv="'+v.id+'" style="accent-color:#6d5efc">'+
+      '<span style="flex:1"><b>'+esc(v.name)+'</b> <span class="dim">· '+esc(v.niche)+' · '+rub0(v.subs)+' подп.</span></span>'+
+      '<span class="muted">'+rub(v.price)+'</span></label>';
+  });
+  body += '</div>';
+  modal('Добавить из базы', body, [
     { t:'Отмена', cls:'ghost', fn: closeModal },
-    { t:'Создать', cls:'ok', fn: function(mb){
-        var c = document.getElementById('mClient').value.trim();
-        if (!c) return toast('Введи клиента', true);
-        var picked = venues.filter(function(v){ return st.pick[v.id]; }).map(function(v){ return { venueId:v.id, name:v.name, price:Number(v.price)||0, ownerPays:Number(v.price)||0 }; });
-        var ownerBase = picked.reduce(function(s,v){ return s + v.price; },0);
-        api('/deals','POST',{ client:c, niche:st.niche, type:st.type, rate:st.rate, ownerBase:ownerBase,
-          venues:picked, services:[], overhead:Number(st.over)||0, status:st.status }).then(function(j){
-          if (!j.ok) return toast(j.error,true);
-          closeModal(); toast('Сделка создана'); render();
-        });
+    { t:'Добавить', cls:'ok', fn: function(){
+        var picked = [];
+        document.querySelectorAll('[data-pickv]').forEach(function(cb){ if (cb.checked) picked.push(cb.dataset.pickv); });
+        picked.forEach(function(id){ var v = W.venues.filter(function(x){return x.id===id;})[0]; if (v) addVenue(v); });
+        closeModal();
+        if (!picked.length) toast('Ничего не выбрано', true);
       }}
   ]);
-  bind();
-  function bind(){
-    var mb = document.querySelector('.mbox');
-    mb.querySelectorAll('[data-n]').forEach(function(b){ b.onclick = function(){ st.niche=b.dataset.n; refresh(); }; });
-    mb.querySelectorAll('[data-t]').forEach(function(b){ b.onclick = function(){ st.type=b.dataset.t; refresh(); }; });
-    mb.querySelectorAll('[data-rate]').forEach(function(b){ b.onclick = function(){ st.rate=Number(b.dataset.rate); refresh(); }; });
-    mb.querySelectorAll('[data-pick]').forEach(function(cb){ cb.onchange = function(){ st.pick[cb.dataset.pick]=cb.checked; refresh(); }; });
-    var s = document.getElementById('mSrv'), o = document.getElementById('mOver');
-    if (s) s.oninput = function(){ st.srv = s.value; };
-    if (o) o.oninput = function(){ st.over = o.value; };
-  }
-  function refresh(){
-    var c = document.getElementById('mClient');
-    if (c) st.client = c.value;
-    var mb = document.querySelector('.mbox .mbody');
-    mb.innerHTML = body(); bind();
-  }
+}
+
+function svcLib(){
+  var body = '<div class="hint" style="margin-bottom:12px">Готовые услуги. Отметь — добавятся в сделку, цены можно поправить.</div>';
+  body += '<div style="border:1px solid var(--line);border-radius:10px">';
+  SVC_LIB.forEach(function(x,i){
+    body += '<label style="display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid rgba(35,40,56,.5);font-size:12.5px;cursor:pointer">'+
+      '<input type="checkbox" data-svcp="'+i+'" style="accent-color:#6d5efc"><span style="flex:1">'+x.name+'</span><span class="muted">'+rub(x.price)+'</span></label>';
+  });
+  body += '</div>';
+  modal('Готовые услуги', body, [
+    { t:'Отмена', cls:'ghost', fn: closeModal },
+    { t:'Добавить', cls:'ok', fn: function(){
+        document.querySelectorAll('[data-svcp]').forEach(function(cb){
+          if (cb.checked){ var x = SVC_LIB[Number(cb.dataset.svcp)]; W.data.services.push({ name:x.name, price:x.price }); }
+        });
+        closeModal(); wRender();
+      }}
+  ]);
+}
+
+function wStepNext(){
+  W.active = null;
+  if (W.step===1 && !W.data.client){ return toast('Введи название клиента', true); }
+  if (W.step===2 && !W.data.venues.length){ return toast('Добавь хотя бы одну площадку', true); }
+  W.step = Math.min(6, W.step+1);
+  wRender();
+}
+
+function wSave(){
+  var s = W.data, c = wCalc();
+  if (!s.client) return toast('Нет названия клиента', true);
+  if (!s.venues.length) return toast('В пакете нет площадок', true);
+  var payload = {
+    client:s.client, niche:s.niche, type:s.type, budget:s.budget, dealDate:s.dealDate,
+    rate:s.rate, venues:s.venues.map(function(v){
+      return { venueId:v.venueId, name:v.name, type:v.type, niche:v.niche, subs:v.subs, reach:v.reach,
+        price:v.price, qty:v.qty, opts:v.opts, customOptSum:v.customOptSum, ownRate:v.ownRate,
+        format:v.format, date:v.date };
+    }),
+    services:s.services, overhead:s.overhead, refRate:s.refRate, round:s.round, status:s.status
+  };
+  var url = s.dealId ? '/deals/'+s.dealId : '/deals';
+  var method = s.dealId ? 'PUT' : 'POST';
+  api(url, method, payload).then(function(j){
+    if (!j.ok) return toast(j.error, true);
+    toast(s.dealId ? 'Сделка обновлена' : 'Сделка создана: '+rub(j.deal.clientTotal));
+    W.data.dealId = j.deal.id;
+    wizardClose();
+  });
+}
+
+function wExport(){
+  if (!W.data.dealId) return toast('Сначала сохрани сделку', true);
+  window.location = '/api/deals/'+W.data.dealId+'/mediaplan';
+}
+function wDelete(){
+  if (!W.data.dealId) return;
+  if (!confirm('Удалить сделку?')) return;
+  api('/deals/'+W.data.dealId,'DELETE').then(function(j){
+    if (!j.ok) return toast(j.error,true);
+    toast('Удалено'); wizardClose();
+  });
 }
 
 /* ================= VENUES ================= */
@@ -466,7 +908,7 @@ function viewVenues(){
     });
     if (!vs.length) h += '<div class="card"><div class="empty"><div class="ee">📡</div>База пуста</div></div>';
     h += '</div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     $('vNew').onclick = venueModal;
   });
 }
@@ -530,7 +972,7 @@ function viewCode(){
       h += '</tbody></table></div></div>';
     }
     h += '</div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     var i = $('cIssue'); if (i) i.onclick = function(){
       api('/code/issue','POST').then(function(r){ if(r.ok){ toast('Код выдан: '+r.code); render(); } else toast(r.error,true); });
     };
@@ -575,20 +1017,20 @@ function viewTeam(){
         '</td></tr>';
     });
     h += '</tbody></table></div></div></div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
 
     var n = $('uNew'); if (n) n.onclick = userModal;
-    $('content').querySelectorAll('[data-block]').forEach(function(b){
+    $('dash').querySelectorAll('[data-block]').forEach(function(b){
       b.onclick = function(){ api('/users/'+b.dataset.block+'/block','POST',{ blocked: b.dataset.cur==='0' }).then(function(j){ if(j.ok){ toast('Готово'); render(); } else toast(j.error,true); }); };
     });
-    $('content').querySelectorAll('[data-reset]').forEach(function(b){
+    $('dash').querySelectorAll('[data-reset]').forEach(function(b){
       b.onclick = function(){
         var p = prompt('Новый пароль (мин. 8 символов):', 'sgax'+Math.floor(Math.random()*9000+1000));
         if (!p) return;
         api('/users/'+b.dataset.reset+'/reset','POST',{ password:p }).then(function(j){ j.ok?toast('Пароль сброшен: '+p):toast(j.error,true); });
       };
     });
-    $('content').querySelectorAll('[data-edit]').forEach(function(b){
+    $('dash').querySelectorAll('[data-edit]').forEach(function(b){
       b.onclick = function(){ editUserModal(CACHE.users.filter(function(x){ return x.id===b.dataset.edit; })[0]); };
     });
   });
@@ -689,15 +1131,15 @@ function viewPayouts(){
       h += '</div>';
     });
     h += '</div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
 
     var b = $('pBuild'); if (b) b.onclick = function(){
       api('/payouts/build','POST',{}).then(function(r){ if(r.ok){ toast('Заявка сформирована: '+rub(r.payout.total)); render(); } else toast(r.error,true); });
     };
-    $('content').querySelectorAll('[data-approve]').forEach(function(x){
+    $('dash').querySelectorAll('[data-approve]').forEach(function(x){
       x.onclick = function(){ api('/payouts/approve','POST',{ id:x.dataset.approve }).then(function(r){ r.ok?(toast('Заявка утверждена'),render()):toast(r.error,true); }); };
     });
-    $('content').querySelectorAll('[data-reject]').forEach(function(x){
+    $('dash').querySelectorAll('[data-reject]').forEach(function(x){
       x.onclick = function(){ var c = prompt('Причина отклонения:'); if(c===null) return;
         api('/payouts/approve','POST',{ id:x.dataset.reject, reject:true, comment:c }).then(function(r){ r.ok?(toast('Отклонено'),render()):toast(r.error,true); }); };
     });
@@ -710,7 +1152,7 @@ function viewMonitor(){
   if (monitorTimer) clearInterval(monitorTimer);
   function load(){
     api('/monitor').then(function(j){
-      if (!j.ok) return $('content').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
+      if (!j.ok) return $('dash').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
       var rows = j.rows || [];
       var worked = rows.filter(function(r){ return r.daysIdle === 0; }).length;
       var idle = rows.filter(function(r){ return r.status === 'idle' || r.status === 'blocked'; }).length;
@@ -734,7 +1176,7 @@ function viewMonitor(){
       });
       if (!rows.length) h += '<tr><td colspan="8"><div class="empty">Нет сотрудников</div></td></tr>';
       h += '</tbody></table></div></div></div>';
-      $('content').innerHTML = h;
+      $('dash').innerHTML = h;
     });
   }
   load();
@@ -760,7 +1202,7 @@ function viewInvites(){
         '<td>'+(dead?'':'<button class="btn ghost sm" data-rev="'+i.id+'">Отозвать</button>')+'</td></tr>';
     });
     h += '</tbody></table></div></div></div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     $('iNew').onclick = function(){
       var roles = [['manager','🧑‍💼 Менеджер'],['senior_manager','⭐ Старший менеджер'],['head','🎖️ Руководитель']];
       modal('Новое приглашение', '<div class="f"><label>Роль</label><div class="chip-pick" id="ivRoles">'+roles.map(function(r,i){return '<button data-r="'+r[0]+'" class="'+(i===0?'on':'')+'">'+r[1]+'</button>';}).join('')+'</div></div>'+
@@ -779,7 +1221,7 @@ function viewInvites(){
         b.onclick = function(){ document.querySelectorAll('#ivRoles button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); };
       });
     };
-    $('content').querySelectorAll('[data-rev]').forEach(function(b){
+    $('dash').querySelectorAll('[data-rev]').forEach(function(b){
       b.onclick = function(){ api('/invites/revoke','POST',{ id:b.dataset.rev }).then(function(j){ j.ok?(toast('Отозван'),render()):toast(j.error,true); }); };
     });
   });
@@ -788,7 +1230,7 @@ function viewInvites(){
 /* ================= SETTINGS / ADMIN ================= */
 function viewSettings(){
   api('/settings').then(function(j){
-    if (!j.ok) return $('content').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
+    if (!j.ok) return $('dash').innerHTML = '<div class="wrap"><div class="card">'+esc(j.error)+'</div></div>';
     var s = j.settings; CACHE.settings = s;
     var h = '<div class="wrap"><div class="page-h"><div><h2>Админка</h2><p>Тарифы, автоматика выплат, безопасность и матрица прав. Видна только основателю.</p></div><div class="sp"></div><button class="btn" id="stSave">Сохранить</button></div>';
     h += '<div class="grid g2" style="margin-bottom:14px">';
@@ -817,7 +1259,7 @@ function viewSettings(){
       '<div class="hint">Основателю приходит оповещение на «Обзоре» и в «Контроле»: кто не заходил, у кого нет сделок, кто онлайн. Плюс журнал всех действий.</div>'+
       '<div class="hr"></div><div class="card-h"><h3>🎭 Матрица прав</h3></div>'+permMatrix()+'</div>';
     h += '</div></div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     // toggles
     $('sAuto').onclick = function(){ s.autoPayout = !s.autoPayout; $('sAuto').classList.toggle('on', s.autoPayout); };
     $('sCode').onclick = function(){ s.codeRequired = !s.codeRequired; $('sCode').classList.toggle('on', s.codeRequired); };
@@ -871,7 +1313,7 @@ function viewLog(){
         '<td class="muted">'+esc(l.target)+'</td><td class="dim">'+esc(String(l.meta).slice(0,70))+'</td></tr>';
     });
     h += '</tbody></table></div></div></div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     $('lgR').onclick = render;
   });
 }
@@ -893,7 +1335,7 @@ function viewProfile(){
       '<button class="btn wide" id="pwGo">Сменить пароль</button>'+
       '<div class="hint">После смены пароля все текущие сессии остаются — но старый пароль больше не работает.</div></div>';
     h += '</div></div>';
-    $('content').innerHTML = h;
+    $('dash').innerHTML = h;
     $('pwGo').onclick = function(){
       var o = $('pwOld').value, n = $('pwNew').value, n2 = $('pwNew2').value;
       if (n !== n2) return toast('Пароли не совпадают', true);

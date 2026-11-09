@@ -1,0 +1,21 @@
+# база с хэшами паролей и сделками — в репозиторий не кладём
+crm/data/db.json
+
+# зависимости и кэши
+node_modules/
+.npm/
+.cache/
+dist/
+build/
+out/
+
+# системное
+.DS_Store
+Thumbs.db
+*.log
+
+# секреты
+.env
+.env.*
+*.pem
+*.key

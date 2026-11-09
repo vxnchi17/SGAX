@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGAX — калькулятор: продажа инвентаря партнёров</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#07080c;--bg2:#0e1017;--card:#141722;--card2:#181c28;--line:#222636;
+    --txt:#e9ecf6;--muted:#868da6;--dim:#5c6377;
+    --acc:#6d5efc;--acc2:#00e0b8;--owner:#ff8a5c;--warn:#ffb347;--red:#ff5c7a;--gold:#ffd166;
+  }
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;padding:0 0 70px}
+  body.locked{overflow:hidden}
+  .wrap{max-width:1260px;margin:0 auto;padding:0 22px}
+
+  /* SPLASH */
+  #splash{position:fixed;inset:0;z-index:999;background:#06070b;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .55s ease,visibility .55s;padding:24px;text-align:center}
+  #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+  #splash:before{content:'';position:absolute;width:760px;height:760px;border-radius:50%;background:radial-gradient(circle,rgba(109,94,252,.22),transparent 62%);top:-260px;left:50%;transform:translateX(-50%);pointer-events:none}
+  #splash:after{content:'';position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(0,224,184,.13),transparent 62%);bottom:-260px;left:18%;pointer-events:none}
+  .s-inner{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;animation:sIn .85s cubic-bezier(.16,1,.3,1) both}
+  @keyframes sIn{from{opacity:0;transform:translateY(22px) scale(.96)}to{opacity:1;transform:none}}
+  .s-logo{width:110px;height:110px;margin-bottom:24px;filter:drop-shadow(0 16px 44px rgba(109,94,252,.42))}
+  .s-logo svg{width:100%;height:100%;display:block}
+  .s-word{font-size:clamp(38px,7vw,58px);font-weight:900;letter-spacing:.14em;line-height:1;margin-bottom:13px}
+  .s-word span{background:linear-gradient(96deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .s-tag{font-size:clamp(13px,1.7vw,16px);color:var(--muted);letter-spacing:.05em;margin-bottom:40px;max-width:440px}
+  .s-line{width:64px;height:2px;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:2px;margin-bottom:36px;opacity:.8}
+  .s-btn{background:linear-gradient(96deg,var(--acc),#5a4bf0);color:#fff;border:none;padding:16px 42px;border-radius:12px;font-size:15.5px;font-weight:800;letter-spacing:.03em;cursor:pointer;font-family:inherit;transition:.22s;box-shadow:0 12px 34px rgba(109,94,252,.34)}
+  .s-btn:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(109,94,252,.5)}
+  .s-foot{position:absolute;bottom:26px;left:0;right:0;text-align:center;font-size:11.5px;color:#3d4356;letter-spacing:.1em;text-transform:uppercase;z-index:2}
+
+  header{padding:22px 0 18px;border-bottom:1px solid var(--line);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .mk{width:40px;height:40px;flex-shrink:0}
+  .brand .mk svg{width:100%;height:100%;display:block}
+  .brand .nm{font-size:19px;font-weight:900;letter-spacing:.11em;line-height:1.1}
+  .brand .nm span{background:linear-gradient(96deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand .sub{font-size:11.5px;color:var(--dim);letter-spacing:.04em;margin-top:2px}
+  .hdr-r{text-align:right;font-size:11.5px;color:var(--dim);line-height:1.6}
+  .hdr-r b{color:var(--acc2);font-weight:800}
+
+  .toptabs{display:flex;gap:6px;background:var(--bg2);padding:5px;border-radius:12px;border:1px solid var(--line);margin-bottom:20px;max-width:640px}
+  .toptab{flex:1;padding:11px 12px;border-radius:9px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;text-align:center;transition:.16s;border:none;background:none;font-family:inherit}
+  .toptab.on{background:var(--acc);color:#fff;box-shadow:0 4px 16px rgba(109,94,252,.34)}
+  .toptab:hover:not(.on){color:var(--txt)}
+
+  .cols{display:grid;grid-template-columns:1.15fr .85fr;gap:20px;align-items:start}
+  @media(max-width:1020px){.cols{grid-template-columns:1fr}}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:22px}
+  .panel + .panel{margin-top:18px}
+  .ptitle{font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--acc2);font-weight:800;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .ptitle gold{color:var(--gold)}
+
+  .field{margin-bottom:16px}.field:last-child{margin-bottom:0}
+  .field > label.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;margin-bottom:7px}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.5}
+  .hint b{color:var(--muted)}
+
+  input[type=number],select,input[type=text]{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);padding:10px 12px;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;transition:.15s}
+  input:focus,select:focus{outline:none;border-color:var(--acc)}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:var(--line);outline:none;margin-top:6px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg)}
+  .rv{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:5px}
+  .rv b{color:var(--txt);font-size:13px}
+
+  /* TIER CARDS */
+  .tiers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+  @media(max-width:520px){.tiers{grid-template-columns:1fr}}
+  .tier{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:14px;cursor:pointer;transition:.16s;position:relative}
+  .tier:hover{border-color:#333a52}
+  .tier.on{border-color:var(--acc);background:rgba(109,94,252,.12)}
+  .tier.on:after{content:'✓';position:absolute;top:10px;right:12px;color:var(--acc);font-weight:900;font-size:14px}
+  .tier .t-nm{font-size:13.5px;font-weight:800;margin-bottom:3px}
+  .tier .t-desc{font-size:11.5px;color:var(--dim);line-height:1.4;margin-bottom:8px;min-height:32px}
+  .tier .t-pct{font-size:22px;font-weight:900;letter-spacing:-.02em}
+  .tier.excl .t-pct{color:var(--acc2)}
+  .tier.stand .t-pct{color:var(--gold)}
+  .tier .t-note{font-size:10.5px;color:var(--dim);margin-top:2px}
+
+  .res{position:sticky;top:20px}
+  .bigbox{background:linear-gradient(165deg,rgba(109,94,252,.13),var(--card) 55%);border:1px solid rgba(109,94,252,.35)}
+  .clientpay{text-align:center;padding-bottom:13px;border-bottom:1px solid var(--line)}
+  .clientpay .cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .clientpay .val{font-size:clamp(28px,4vw,38px);font-weight:900;letter-spacing:-.03em;line-height:1.15;margin-top:3px}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:11px;overflow:hidden;margin-top:13px}
+  .split > div{background:var(--card2);padding:14px 12px;text-align:center}
+  .split .cap{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-bottom:5px}
+  .split .v{font-size:clamp(18px,2.4vw,24px);font-weight:900;letter-spacing:-.02em;line-height:1.15}
+  .split .owner .cap,.split .owner .v{color:var(--owner)}
+  .split .us .cap,.split .us .v{color:var(--acc2)}
+  .split .pct{font-size:11px;color:var(--dim);margin-top:2px}
+  .stackbar{height:12px;border-radius:99px;overflow:hidden;display:flex;background:var(--bg2);margin-top:13px;border:1px solid var(--line)}
+  .stackbar i{display:block;height:100%;transition:width .25s}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .bars{margin-top:15px;border-top:1px solid var(--line);padding-top:11px}
+  .b{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;color:var(--muted);gap:12px}
+  .b b{color:var(--txt);font-weight:700;white-space:nowrap}
+  .b.hi b{color:var(--acc2)}
+  .alert{margin-top:13px;border-radius:9px;padding:11px 13px;font-size:12.5px;line-height:1.45;display:none}
+  .alert.warn{background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.32);color:var(--warn);display:block}
+  .alert.bad{background:rgba(255,92,122,.1);border:1px solid rgba(255,92,122,.32);color:var(--red);display:block}
+  .alert.ok{background:rgba(0,224,184,.09);border:1px solid rgba(0,224,184,.28);color:var(--acc2);display:block}
+  .btnrow{display:flex;gap:8px;margin-top:15px}
+  .btn{flex:1;background:var(--acc);color:#fff;border:none;padding:12px;border-radius:9px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit;transition:.15s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(109,94,252,.3)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);flex:0 0 auto;padding:12px 15px;box-shadow:none}
+  .btn.ghost:hover{background:var(--bg2);box-shadow:none}
+  textarea{width:100%;min-height:140px;background:var(--bg2);border:1px solid var(--line);color:var(--txt);padding:12px;border-radius:9px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.55;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--acc)}
+
+  .forecast{text-align:center;padding-bottom:15px;border-bottom:1px solid var(--line)}
+  .forecast .cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .forecast .val{font-size:clamp(30px,4.4vw,42px);font-weight:900;letter-spacing:-.03em;line-height:1.1;background:linear-gradient(96deg,var(--acc2),#4de3c6);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:2px}
+  .forecast .sub2{font-size:12px;color:var(--dim);margin-top:4px}
+  .funnel{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);border-radius:11px;overflow:hidden;margin-top:13px}
+  .funnel > div{background:var(--card2);padding:13px 9px;text-align:center}
+  .funnel .cap{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:800;margin-bottom:4px}
+  .funnel .v{font-size:16px;font-weight:900;letter-spacing:-.01em}
+  .goalbox{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:13px}
+  .goalbox .cap{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:9px}
+  .goalres{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.55}
+  .goalres b{color:var(--txt)}
+  .goalres .big{font-size:25px;font-weight:900;color:var(--acc2);display:block;margin:3px 0 2px}
+  .hidden{display:none!important}
+
+  /* migration */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  @media(max-width:520px){.cmp{grid-template-columns:1fr}}
+  .cmpc{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:15px}
+  .cmpc.now{border-color:rgba(255,209,102,.35)}
+  .cmpc.after{border-color:rgba(0,224,184,.35);background:linear-gradient(170deg,rgba(0,224,184,.07),var(--card2) 60%)}
+  .cmpc .cc{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--dim);margin-bottom:7px}
+  .cmpc .cv{font-size:24px;font-weight:900;letter-spacing:-.02em;line-height:1.15}
+  .cmpc.now .cv{color:var(--gold)}
+  .cmpc.after .cv{color:var(--acc2)}
+  .cmpc .cn{font-size:11.5px;color:var(--dim);margin-top:4px}
+  .be{background:rgba(109,94,252,.1);border:1px solid rgba(109,94,252,.3);border-radius:11px;padding:14px;margin-top:14px;font-size:13px;color:var(--muted);line-height:1.55}
+  .be b{color:#b9aeff}
+  .be .big{display:block;font-size:26px;font-weight:900;color:#b9aeff;margin:4px 0 2px}
+</style>
+</head>
+<body class="locked">
+
+<div id="splash">
+  <div class="s-inner">
+    <div class="s-logo">
+      <svg viewBox="0 0 64 64" fill="none">
+        <defs><linearGradient id="lgS" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#00e0b8"/></linearGradient></defs>
+        <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgS)" opacity=".13"/>
+        <rect x="2" y="2" width="60" height="60" rx="17" stroke="url(#lgS)" stroke-width="1.6" opacity=".85"/>
+        <path d="M21 19.5 L33.5 32 L21 44.5" stroke="url(#lgS)" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M35 19.5 L47.5 32 L35 44.5" stroke="#ffffff" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>
+      </svg>
+    </div>
+    <div class="s-word">SG<span>AX</span></div>
+    <div class="s-tag">Продаём рекламу в каналах и серверах партнёров</div>
+    <div class="s-line"></div>
+    <button class="s-btn" id="startBtn">Начать расчёт →</button>
+  </div>
+  <div class="s-foot">Калькулятор · v4 · модель «процент со сделки»</div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mk">
+        <svg viewBox="0 0 64 64" fill="none">
+          <defs><linearGradient id="lgH" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#00e0b8"/></linearGradient></defs>
+          <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgH)" opacity=".13"/>
+          <rect x="2" y="2" width="60" height="60" rx="17" stroke="url(#lgH)" stroke-width="1.6" opacity=".85"/>
+          <path d="M21 19.5 L33.5 32 L21 44.5" stroke="url(#lgH)" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M35 19.5 L47.5 32 L35 44.5" stroke="#ffffff" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>
+        </svg>
+      </div>
+      <div>
+        <div class="nm">SG<span>AX</span></div>
+        <div class="sub">инвентарь партнёров · процент со сделки</div>
+      </div>
+    </div>
+    <div class="hdr-r">Не покупаем рекламу<br><b>продаём инвентарь партнёров</b></div>
+  </header>
+
+  <div class="toptabs">
+    <button class="toptab on" data-view="deal">Сделка</button>
+    <button class="toptab" data-view="pool">Пул и прогноз</button>
+    <button class="toptab" data-view="migr">Прикормка → миграция</button>
+  </div>
+
+  <!-- ================= DEAL ================= -->
+  <div id="viewDeal">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <div class="ptitle">1 · Тариф клиента</div>
+          <div class="tiers">
+            <div class="tier excl on" data-pct="15">
+              <div class="t-nm">Эксклюзив</div>
+              <div class="t-desc">Клиент берёт только у нас. Мы поставляем всю его рекламу</div>
+              <div class="t-pct">15%</div>
+              <div class="t-note">наш процент со сделки</div>
+            </div>
+            <div class="tier stand" data-pct="35">
+              <div class="t-nm">Стандарт</div>
+              <div class="t-desc">Клиент приводит свои площадки и комбинирует с нашими</div>
+              <div class="t-pct">35%</div>
+              <div class="t-note">наш процент со сделки</div>
+            </div>
+          </div>
+          <div class="field" style="margin-top:14px">
+            <label class="lbl">Свой процент (режим прикормки)</label>
+            <input type="range" id="rate" min="5" max="50" value="15" step="1">
+            <div class="rv"><span>5%</span><span><b id="rateVal">15%</b></span><span>50%</span></div>
+            <div class="hint">Сейчас кормим всех на 15%. Потом либо сажаем на эксклюзив, либо поднимаем до 35%.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptitle">2 · Сделка</div>
+          <div class="field">
+            <label class="lbl">Цена владельца площадки за размещение, ₽</label>
+            <input type="number" id="ownerPrice" value="1500" step="100">
+            <div class="hint">Ровно столько получает владелец. Мы к его цене не притрагиваемся.</div>
+          </div>
+          <div class="field">
+            <label class="lbl">Размещений в заказе</label>
+            <input type="range" id="qty" min="1" max="20" value="2" step="1">
+            <div class="rv"><span>1</span><span><b id="qtyVal">2</b> размещения</span><span>20</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Услуги SGAX сверху, ₽ за заказ</label>
+            <input type="number" id="services" value="0" step="1000">
+            <div class="hint">Креатив, медиаплан, ведение — если продаём. Считаются отдельно от процента.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptitle">3 · Партнёрская программа для владельцев</div>
+          <div class="field">
+            <label class="lbl">Владелец приводит нам клиента (% от нашего дохода)</label>
+            <input type="range" id="ownerRef" min="0" max="40" value="0" step="5">
+            <div class="rv"><span>0%</span><span><b id="ownerRefVal">0%</b></span><span>40%</span></div>
+            <div class="hint">Владельцы каналов друг друга знают. 10–15% от нашего дохода за приведённого клиента — самый дешёвый канал роста.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="res">
+        <div class="panel bigbox">
+          <div class="clientpay">
+            <div class="cap">Клиент платит</div>
+            <div class="val" id="vClient">—</div>
+          </div>
+          <div class="split">
+            <div class="owner"><div class="cap">Владельцу</div><div class="v" id="vOwner">—</div><div class="pct" id="pOwner">—</div></div>
+            <div class="us"><div class="cap">Нам</div><div class="v" id="vUs">—</div><div class="pct" id="pUs">—</div></div>
+          </div>
+          <div class="stackbar"><i id="barOwner" style="background:var(--owner)"></i><i id="barUs" style="background:var(--acc2)"></i></div>
+          <div class="legend">
+            <span><i class="dot" style="background:var(--owner)"></i> владельцу площадки</span>
+            <span><i class="dot" style="background:var(--acc2)"></i> в SGAX</span>
+          </div>
+          <div class="bars">
+            <div class="b"><span>Владельцу (его цена, целиком)</span><b id="bOwner">—</b></div>
+            <div class="b"><span>Наш процент со сделки</span><b id="bPct">—</b></div>
+            <div class="b"><span>Услуги SGAX</span><b id="bSrv">—</b></div>
+            <div class="b"><span>Реферал владельцу</span><b id="bRef">—</b></div>
+            <div class="b hi"><span>Нам чистыми</span><b id="bNet">—</b></div>
+            <div class="b"><span>С одного размещения</span><b id="bPerUnit">—</b></div>
+            <div class="b"><span>Наша доля в чеке</span><b id="bShare">—</b></div>
+          </div>
+          <div class="alert" id="alert"></div>
+          <div class="btnrow"><button class="btn" id="copyBtn">Скопировать</button></div>
+        </div>
+        <div class="panel">
+          <div class="ptitle">Раскладка текстом</div>
+          <textarea id="out" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= POOL ================= -->
+  <div id="viewPool" class="hidden">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <div class="ptitle">Пул площадок</div>
+          <div class="field">
+            <label class="lbl">Площадок в пуле</label>
+            <input type="range" id="poolSize" min="1" max="300" value="40" step="1">
+            <div class="rv"><span>1</span><span><b id="poolSizeVal">40</b></span><span>300</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Размещений в месяц с площадки</label>
+            <input type="range" id="ppm" min="1" max="12" value="3" step="1">
+            <div class="rv"><span>1</span><span><b id="ppmVal">3</b> шт/мес</span><span>12</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Загрузка пула, %</label>
+            <input type="range" id="fill" min="20" max="100" value="70" step="5">
+            <div class="rv"><span>20%</span><span><b id="fillVal">70%</b></span><span>100%</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Средняя цена владельца, ₽</label>
+            <input type="number" id="avgPrice" value="1500" step="100">
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptitle">Тарифы клиентов</div>
+          <div class="field">
+            <label class="lbl">Доля дохода с эксклюзива (15%)</label>
+            <input type="range" id="mixExcl" min="0" max="100" value="70" step="5">
+            <div class="rv"><span>0%</span><span><b id="mixExclVal">70%</b> / 30%</span><span>100%</span></div>
+            <div class="hint">Какая часть оборота идёт по 15% (эксклюзив), остальное — по 35% (стандарт).</div>
+          </div>
+          <div class="field">
+            <label class="lbl">Услуги: доля заказов с услугами, %</label>
+            <input type="range" id="attach" min="0" max="100" value="30" step="5">
+            <div class="rv"><span>0%</span><span><b id="attachVal">30%</b></span><span>100%</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Средний чек услуг, ₽</label>
+            <input type="number" id="srvPrice" value="5000" step="1000">
+          </div>
+          <div class="field">
+            <label class="lbl">Постоянные расходы в месяц, ₽</label>
+            <input type="number" id="fixedCost" value="15000" step="5000">
+          </div>
+        </div>
+      </div>
+
+      <div class="res">
+        <div class="panel bigbox">
+          <div class="forecast">
+            <div class="cap">Доход в месяц, чистыми</div>
+            <div class="val" id="fIncome">—</div>
+            <div class="sub2" id="fIncomeSub">&nbsp;</div>
+          </div>
+          <div class="funnel">
+            <div><div class="cap">Размещений/мес</div><div class="v" id="fPlacements">—</div></div>
+            <div><div class="cap">С процента</div><div class="v" style="color:var(--acc2)" id="fFromPct">—</div></div>
+            <div><div class="cap">С услуг</div><div class="v" style="color:var(--gold)" id="fFromSrv">—</div></div>
+          </div>
+          <div class="bars">
+            <div class="b"><span>Работающих площадок</span><b id="fActive">—</b></div>
+            <div class="b"><span>Оборот (клиентские деньги)</span><b id="fGmv">—</b></div>
+            <div class="b"><span>Владельцам площадок</span><b id="fOwners">—</b></div>
+            <div class="b"><span>Постоянные расходы</span><b id="fFixed">—</b></div>
+            <div class="b hi"><span>Чистыми в SGAX</span><b id="fNet">—</b></div>
+            <div class="b"><span>Наша доля от оборота</span><b id="fTake">—</b></div>
+          </div>
+          <div class="goalbox">
+            <div class="cap">Цель по доходу в месяц</div>
+            <input type="number" id="goal" value="100000" step="10000">
+            <div class="goalres" id="goalRes">—</div>
+          </div>
+          <div class="alert" id="pAlert"></div>
+          <div class="btnrow"><button class="btn" id="copyForecast">Скопировать прогноз</button></div>
+        </div>
+        <div class="panel">
+          <div class="ptitle">Прогноз текстом</div>
+          <textarea id="outPool" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MIGRATION ================= -->
+  <div id="viewMigr" class="hidden">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <div class="ptitle">Сейчас — режим прикормки</div>
+          <div class="field">
+            <label class="lbl">Клиентов сейчас</label>
+            <input type="number" id="mClients" value="10" step="1">
+          </div>
+          <div class="field">
+            <label class="lbl">Размещений на клиента в месяц</label>
+            <input type="number" id="mPerClient" value="4" step="1">
+          </div>
+          <div class="field">
+            <label class="lbl">Средняя цена владельца, ₽</label>
+            <input type="number" id="mPrice" value="3000" step="500">
+          </div>
+          <div class="field">
+            <label class="lbl">Текущий процент для всех</label>
+            <input type="range" id="mNow" min="5" max="40" value="15" step="1">
+            <div class="rv"><span>5%</span><span><b id="mNowVal">15%</b></span><span>40%</span></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptitle">Целевая модель</div>
+          <div class="field">
+            <label class="lbl">Кого переводим на эксклюзив (15%), %</label>
+            <input type="range" id="mExcl" min="0" max="100" value="50" step="5">
+            <div class="rv"><span>0%</span><span><b id="mExclVal">50%</b></span><span>100%</span></div>
+            <div class="hint">Остальные уходят на стандарт 35%.</div>
+          </div>
+          <div class="field">
+            <label class="lbl">Сколько клиентов уйдёт при переводе, %</label>
+            <input type="range" id="mChurn" min="0" max="80" value="20" step="5">
+            <div class="rv"><span>0%</span><span><b id="mChurnVal">20%</b></span><span>80%</span></div>
+          </div>
+          <div class="field">
+            <label class="lbl">Стандартный процент</label>
+            <input type="number" id="mStand" value="35" step="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="res">
+        <div class="panel bigbox">
+          <div class="cmp">
+            <div class="cmpc now">
+              <div class="cc">Сейчас (все на 15%)</div>
+              <div class="cv" id="mNowIncome">—</div>
+              <div class="cn" id="mNowSub">—</div>
+            </div>
+            <div class="cmpc after">
+              <div class="cc">После миграции</div>
+              <div class="cv" id="mAfterIncome">—</div>
+              <div class="cn" id="mAfterSub">—</div>
+            </div>
+          </div>
+
+          <div class="bars" style="border-top:none;padding-top:0">
+            <div class="b"><span>Клиентов останется</span><b id="mLeft">—</b></div>
+            <div class="b"><span>Эксклюзив 15%</span><b id="mExclCnt">—</b></div>
+            <div class="b"><span>Стандарт 35%</span><b id="mStandCnt">—</b></div>
+            <div class="b hi"><span>Рост дохода</span><b id="mDelta">—</b></div>
+            <div class="b"><span>Рост в процентах</span><b id="mDeltaPct">—</b></div>
+          </div>
+
+          <div class="be">
+            <b>Точка безубыточности миграции</b>
+            <span class="big" id="mBE">—</span>
+            Столько клиентов можно потерять — и мы всё равно заработаем не меньше. Всё, что удержим сверх этого, уже чистый плюс.
+          </div>
+
+          <div class="alert" id="mAlert"></div>
+          <div class="btnrow"><button class="btn" id="copyMigr">Скопировать</button></div>
+        </div>
+        <div class="panel">
+          <div class="ptitle">Выводы текстом</div>
+          <textarea id="outMigr" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  function money(n){ n=Math.round(n); return n.toLocaleString('ru-RU').replace(/\u00A0/g,' ')+' ₽'; }
+  function pct(n){ return (n*100).toFixed(1).replace('.',',')+'%'; }
+
+  $('startBtn').addEventListener('click',function(){
+    $('splash').classList.add('hide');
+    document.body.classList.remove('locked');
+  });
+
+  document.querySelectorAll('.toptab').forEach(function(t){
+    t.addEventListener('click',function(){
+      document.querySelectorAll('.toptab').forEach(function(x){x.classList.remove('on');});
+      t.classList.add('on');
+      var v=t.dataset.view;
+      $('viewDeal').classList.toggle('hidden',v!=='deal');
+      $('viewPool').classList.toggle('hidden',v!=='pool');
+      $('viewMigr').classList.toggle('hidden',v!=='migr');
+      if(v==='pool')calcPool();
+      if(v==='migr')calcMigr();
+    });
+  });
+
+  // тарифы
+  document.querySelectorAll('.tier').forEach(function(t){
+    t.addEventListener('click',function(){
+      document.querySelectorAll('.tier').forEach(function(x){x.classList.remove('on');});
+      t.classList.add('on');
+      $('rate').value=t.dataset.pct;
+      calcDeal();
+    });
+  });
+
+  /* ===== DEAL ===== */
+  function calcDeal(){
+    var rate=parseFloat($('rate').value)/100;
+    var P=parseFloat($('ownerPrice').value)||0;
+    var q=parseInt($('qty').value,10);
+    var srv=parseFloat($('services').value)||0;
+    var refRate=parseFloat($('ownerRef').value)/100;
+
+    var ownerTotal=P*q;
+    // наш процент считается от цены клиенту: client = owner/(1-rate)
+    var clientPlace=rate>=1?ownerTotal:ownerTotal/(1-rate);
+    var ourCut=clientPlace-ownerTotal;
+
+    var clientTotal=clientPlace+srv;
+    var refPay=ourCut*refRate;
+    var net=ourCut+srv-refPay;
+
+    $('qtyVal').textContent=q;
+    $('rateVal').textContent=Math.round(rate*100)+'%';
+    $('ownerRefVal').textContent=Math.round(refRate*100)+'%';
+
+    $('vClient').textContent=money(clientTotal);
+    $('vOwner').textContent=money(ownerTotal);
+    $('vUs').textContent=money(net);
+    $('pOwner').textContent=clientTotal>0?pct(ownerTotal/clientTotal):'—';
+    $('pUs').textContent='маржа '+pct(clientTotal>0?net/clientTotal:0);
+
+    var wO=clientTotal>0?ownerTotal/clientTotal*100:0, wU=clientTotal>0?Math.max(0,net)/clientTotal*100:0;
+    $('barOwner').style.width=wO+'%'; $('barUs').style.width=wU+'%';
+
+    $('bOwner').textContent=money(ownerTotal);
+    $('bPct').textContent=money(ourCut);
+    $('bSrv').textContent=srv?money(srv):'—';
+    $('bRef').textContent=refPay?money(refPay):'—';
+    $('bNet').textContent=money(net);
+    $('bPerUnit').textContent=q?money(net/q):'—';
+    $('bShare').textContent=clientTotal>0?pct(net/clientTotal):'—';
+
+    var a=$('alert'); a.className='alert';
+    var perUnit=q?net/q:0;
+    if(rate<=0.15 && perUnit<300){
+      a.className='alert warn';
+      a.textContent='На прикормке '+money(perUnit)+' с размещения — это тонко. Такая модель работает только на объёме; цель — перевести клиента на 35% или на эксклюзив с большим объёмом.';
+    } else if(net<=0){ a.className='alert bad'; a.textContent='Сделка убыточная.'; }
+    else { a.className='alert ok'; a.textContent='Сделка: владелец получает свою цену целиком, нам остаётся '+money(net)+'.'; }
+
+    var L=[];
+    L.push('SGAX — раскладка сделки');L.push('');
+    L.push('Тариф клиента: '+Math.round(rate*100)+'%'+(rate<=0.15?' (эксклюзив)':' (стандарт)'));
+    L.push('Размещений: '+q+' × '+money(P)+' (цена владельца)');
+    L.push('');
+    L.push('Владельцу площадки: '+money(ownerTotal));
+    L.push('Клиент платит: '+money(clientTotal));
+    if(srv)L.push('  в т.ч. услуги SGAX: '+money(srv));
+    L.push('Наш процент со сделки: '+money(ourCut));
+    if(refPay)L.push('Реферал владельцу: −'+money(refPay));
+    L.push('НАМ ЧИСТЫМИ: '+money(net));
+    L.push('С одного размещения: '+money(perUnit));
+    $('out').value=L.join('\n');
+
+    calcPool(); calcMigr();
+  }
+
+  /* ===== POOL ===== */
+  function calcPool(){
+    var pool=parseInt($('poolSize').value,10);
+    var ppm=parseInt($('ppm').value,10);
+    var fill=parseFloat($('fill').value)/100;
+    var avgP=parseFloat($('avgPrice').value)||0;
+    var mixExcl=parseFloat($('mixExcl').value)/100;
+    var attach=parseFloat($('attach').value)/100;
+    var srvP=parseFloat($('srvPrice').value)||0;
+    var fixed=parseFloat($('fixedCost').value)||0;
+
+    var active=pool*fill;
+    var placements=active*ppm;
+
+    var ownerPay=placements*avgP;
+    // средневзвешенная ставка
+    var rExcl=0.15, rStand=0.35;
+    var wRate=mixExcl*rExcl+(1-mixExcl)*rStand;
+    // доля нашего дохода от цены владельца: r/(1-r)
+    var shareExcl=rExcl/(1-rExcl), shareStand=rStand/(1-rStand);
+    var fromPct=ownerPay*(mixExcl*shareExcl+(1-mixExcl)*shareStand);
+
+    var gmvPlace=ownerPay+fromPct;
+    var srvCount=placements*attach;
+    var fromSrv=srvCount*srvP;
+
+    var gmv=gmvPlace+fromSrv;
+    var net=fromPct+fromSrv-fixed;
+    var take=gmv>0?net/gmv:0;
+
+    $('poolSizeVal').textContent=pool;
+    $('ppmVal').textContent=ppm;
+    $('fillVal').textContent=Math.round(fill*100)+'%';
+    $('mixExclVal').textContent=Math.round(mixExcl*100)+'%';
+    $('attachVal').textContent=Math.round(attach*100)+'%';
+
+    $('fIncome').textContent=money(net);
+    $('fIncomeSub').textContent=Math.round(active)+' площадок · '+Math.round(placements)+' размещений · средняя ставка '+pct(wRate);
+    $('fPlacements').textContent=Math.round(placements);
+    $('fFromPct').textContent=money(fromPct);
+    $('fFromSrv').textContent=money(fromSrv);
+    $('fActive').textContent=Math.round(active);
+    $('fGmv').textContent=money(gmv);
+    $('fOwners').textContent=money(ownerPay);
+    $('fFixed').textContent=money(fixed);
+    $('fNet').textContent=money(net);
+    $('fTake').textContent=pct(take);
+
+    var a=$('pAlert'); a.className='alert';
+    if(net<0){a.className='alert bad';a.textContent='Постоянные расходы съедают всё. Нужно больше площадок или выше средняя ставка.';}
+    else if(mixExcl>0.85){a.className='alert warn';a.textContent='Почти весь оборот на 15%. Это прикормка, а не модель — доход растёт только количеством. Планируй перевод части клиентов на 35%.';}
+    else if(take<0.2){a.className='alert warn';a.textContent='Доля от оборота '+pct(take)+' — низко. Проверь среднюю ставку и долю стандарта.';}
+    else {a.className='alert ok';a.textContent='Рабочая модель: '+pct(take)+' от оборота, средняя ставка '+pct(wRate)+'.';}
+
+    var goal=parseFloat($('goal').value)||0;
+    var perPlatform=(fromPct+fromSrv)/Math.max(pool,1);
+    var gr=$('goalRes');
+    if(perPlatform<=0){gr.innerHTML='Доход нулевой — проверь настройки.';}
+    else{
+      var needPool=Math.ceil((goal+fixed)/perPlatform);
+      gr.innerHTML='Одна площадка приносит <b>'+money(perPlatform)+'</b> в месяц.<br>До '+money(goal)+' нужно:'+
+        '<span class="big">'+needPool+' площадок</span>'+
+        'или поднять среднюю ставку — это быстрее, чем искать ещё '+(needPool-pool)+' партнёров.';
+    }
+
+    var T=[];
+    T.push('SGAX — прогноз по пулу');T.push('');
+    T.push('Площадок: '+pool+' (работает '+Math.round(active)+')');
+    T.push('Размещений в месяц: '+Math.round(placements));
+    T.push('Средняя цена владельца: '+money(avgP));
+    T.push('Микс: '+Math.round(mixExcl*100)+'% эксклюзив 15% / '+Math.round((1-mixExcl)*100)+'% стандарт 35%');
+    T.push('Средняя ставка: '+pct(wRate));
+    T.push('');
+    T.push('Оборот: '+money(gmv));
+    T.push('Владельцам: '+money(ownerPay));
+    T.push('Наш процент: '+money(fromPct));
+    T.push('Услуги: '+money(fromSrv));
+    T.push('Постоянные: '+money(fixed));
+    T.push('ЧИСТЫМИ: '+money(net)+' в месяц');
+    T.push('Доля от оборота: '+pct(take));
+    $('outPool').value=T.join('\n');
+  }
+
+  /* ===== MIGRATION ===== */
+  function calcMigr(){
+    var N=parseFloat($('mClients').value)||0;
+    var per=parseFloat($('mPerClient').value)||0;
+    var P=parseFloat($('mPrice').value)||0;
+    var now=parseFloat($('mNow').value)/100;
+    var exclShare=parseFloat($('mExcl').value)/100;
+    var churn=parseFloat($('mChurn').value)/100;
+    var stand=parseFloat($('mStand').value)/100;
+
+    $('mNowVal').textContent=Math.round(now*100)+'%';
+    $('mExclVal').textContent=Math.round(exclShare*100)+'%';
+    $('mChurnVal').textContent=Math.round(churn*100)+'%';
+
+    var ownerPerClient=per*P;
+    var nowCut=ownerPerClient*(now/(1-now));
+
+    var left=N*(1-churn);
+    var exclN=left*exclShare, standN=left*(1-exclShare);
+    var afterCut=exclN*ownerPerClient*(0.15/0.85)+standN*ownerPerClient*(stand/(1-stand));
+
+    var nowTotal=nowCut*N;
+    var afterTotal=afterCut;
+
+    $('mNowIncome').textContent=money(nowTotal);
+    $('mNowSub').textContent=N+' клиентов · '+money(nowCut)+' с клиента';
+    $('mAfterIncome').textContent=money(afterTotal);
+    $('mAfterSub').textContent=Math.round(left)+' клиентов · смешанная ставка';
+
+    $('mLeft').textContent=Math.round(left)+' из '+N;
+    $('mExclCnt').textContent=Math.round(exclN);
+    $('mStandCnt').textContent=Math.round(standN);
+    $('mDelta').textContent=(afterTotal>=nowTotal?'+':'')+money(afterTotal-nowTotal);
+    $('mDeltaPct').textContent=(nowTotal>0?((afterTotal/nowTotal-1)*100).toFixed(1).replace('.',','):'0')+'%';
+
+    // точка безубыточности: при каком churn after=now (при exclShare как задано)
+    var perSurvivor=exclShare*(0.15/0.85)+(1-exclShare)*(stand/(1-stand));
+    var beChurn = perSurvivor>0 ? Math.max(0, 1-(now/(1-now))/perSurvivor) : 1;
+    $('mBE').textContent=Math.round(beChurn*100)+'% клиентов';
+    if(beChurn>1) $('mBE').textContent='перевод невыгоден при таком %';
+
+    var a=$('mAlert'); a.className='alert';
+    if(afterTotal<nowTotal){a.className='alert bad';a.textContent='При таких настройках миграция уменьшит доход. Подними долю стандарта, снизь ожидаемый отток или подними стандартный процент.';}
+    else if(churn>beChurn*0.7){a.className='alert warn';a.textContent='Опасная зона: ожидаемый отток близок к точке безубыточности ('+Math.round(beChurn*100)+'%). Держи запас.';}
+    else {a.className='alert ok';a.textContent='Миграция выгодна: доход вырастет на '+money(afterTotal-nowTotal)+' даже с учётом оттока.';}
+
+    var L=[];
+    L.push('SGAX — прикормка и миграция');L.push('');
+    L.push('Сейчас: '+N+' клиентов, все на '+Math.round(now*100)+'%');
+    L.push('Доход: '+money(nowTotal)+' в месяц');
+    L.push('');
+    L.push('Целевая модель: '+Math.round(exclShare*100)+'% на эксклюзив 15%, '+Math.round((1-exclShare)*100)+'% на стандарт '+Math.round(stand*100)+'%');
+    L.push('Ожидаемый отток: '+Math.round(churn*100)+'% → останется '+Math.round(left)+' клиентов');
+    L.push('Доход после миграции: '+money(afterTotal)+' в месяц');
+    L.push('Разница: '+(afterTotal>=nowTotal?'+':'')+money(afterTotal-nowTotal));
+    L.push('');
+    L.push('Точка безубыточности: можно потерять до '+Math.round(beChurn*100)+'% клиентов');
+    $('outMigr').value=L.join('\n');
+  }
+
+  ['rate','ownerPrice','qty','services','ownerRef'].forEach(function(id){
+    $(id).addEventListener('input',calcDeal); $(id).addEventListener('change',calcDeal);
+  });
+  ['poolSize','ppm','fill','avgPrice','mixExcl','attach','srvPrice','fixedCost','goal'].forEach(function(id){
+    $(id).addEventListener('input',calcPool); $(id).addEventListener('change',calcPool);
+  });
+  ['mClients','mPerClient','mPrice','mNow','mExcl','mChurn','mStand'].forEach(function(id){
+    $(id).addEventListener('input',calcMigr); $(id).addEventListener('change',calcMigr);
+  });
+
+  function wireCopy(elId,btnId){
+    $(btnId).addEventListener('click',function(){
+      var t=$(elId); t.select(); t.setSelectionRange(0,99999);
+      try{document.execCommand('copy');}catch(e){}
+      var b=$(btnId),o=b.textContent; b.textContent='Скопировано';
+      setTimeout(function(){b.textContent=o;},1400);
+    });
+  }
+  wireCopy('out','copyBtn'); wireCopy('outPool','copyForecast'); wireCopy('outMigr','copyMigr');
+
+  calcDeal();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGAX — калькулятор стоимости размещений</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#08090d;--bg2:#0f1119;--card:#151823;--line:#232739;
+    --txt:#e9ecf6;--muted:#868da6;--acc:#6d5efc;--acc2:#00e0b8;--warn:#ffb347;--red:#ff5c7a;
+  }
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;padding:0 0 60px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  header{padding:34px 0 26px;border-bottom:1px solid var(--line);margin-bottom:32px}
+  .logo{font-size:21px;font-weight:900;letter-spacing:.06em}
+  .logo span{color:var(--acc)}
+  .sub{color:var(--muted);font-size:14px;margin-top:6px}
+  h1{font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.02em;margin-bottom:8px}
+  .lead{color:var(--muted);font-size:15px;max-width:680px;margin-bottom:32px}
+
+  .cols{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:start}
+  @media(max-width:940px){.cols{grid-template-columns:1fr}}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .panel + .panel{margin-top:22px}
+  .ptitle{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--acc2);font-weight:800;margin-bottom:18px}
+
+  .field{margin-bottom:20px}
+  .field:last-child{margin-bottom:0}
+  .field > label{display:block;font-size:12.5px;font-weight:700;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+  .hint{font-size:12px;color:#5c6377;margin-top:5px;line-height:1.45}
+
+  input[type=number],select,input[type=text]{
+    width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--txt);
+    padding:11px 13px;border-radius:9px;font-size:15px;font-weight:600;font-family:inherit;transition:.15s}
+  input[type=number]:focus,select:focus,input[type=text]:focus{outline:none;border-color:var(--acc)}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:var(--line);outline:none;margin-top:4px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg);box-shadow:0 0 0 1px var(--acc)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg)}
+  .rv{display:flex;justify-content:space-between;font-size:12.5px;color:#5c6377;margin-top:6px}
+  .rv b{color:var(--txt);font-size:13px}
+
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  @media(max-width:520px){.checks{grid-template-columns:1fr}}
+  .chk{display:flex;align-items:flex-start;gap:9px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;cursor:pointer;font-size:13.5px;transition:.15s}
+  .chk:hover{border-color:#333a52}
+  .chk input{margin-top:2px;accent-color:var(--acc);width:15px;height:15px;cursor:pointer;flex-shrink:0}
+  .chk em{font-style:normal;display:block;font-size:11.5px;color:#5c6377;margin-top:2px}
+
+  .ogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  @media(max-width:520px){.ogrid{grid-template-columns:1fr 1fr}}
+  .opt{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer;text-align:center;transition:.15s;font-size:13px;font-weight:600}
+  .opt:hover{border-color:#333a52}
+  .opt.on{background:rgba(109,94,252,.16);border-color:var(--acc);color:#b9aeff}
+  .opt input{display:none}
+  .opt small{display:block;font-size:11px;color:#5c6377;font-weight:500;margin-top:3px}
+
+  .res{position:sticky;top:24px}
+  .total{font-size:clamp(32px,4.4vw,44px);font-weight:900;letter-spacing:-.03em;background:linear-gradient(96deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.1}
+  .rangelbl{color:var(--muted);font-size:13.5px;margin-top:2px}
+  .bars{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+  .b{display:flex;justify-content:space-between;font-size:14px;padding:7px 0;color:var(--muted)}
+  .b b{color:var(--txt);font-weight:700}
+  .b.tot{border-top:1px solid var(--line);margin-top:9px;padding-top:13px;font-size:15.5px;color:var(--txt);font-weight:800}
+  .b.marg b{color:var(--acc2)}
+  .bar{margin-top:16px;background:var(--bg2);border-radius:99px;height:8px;overflow:hidden;display:flex}
+  .bar i{display:block;height:100%}
+
+  .alert{margin-top:16px;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.45;display:none}
+  .alert.warn{background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.32);color:var(--warn);display:block}
+  .alert.bad{background:rgba(255,92,122,.1);border:1px solid rgba(255,92,122,.32);color:var(--red);display:block}
+  .alert.ok{background:rgba(0,224,184,.09);border:1px solid rgba(0,224,184,.28);color:var(--acc2);display:block}
+
+  .note{font-size:12px;color:#5c6377;margin-top:14px;line-height:1.5}
+  .mini{font-size:12.5px;color:#5c6377;margin-top:10px}
+
+  .btnrow{display:flex;gap:10px;margin-top:20px}
+  .btn{flex:1;background:var(--acc);color:#fff;border:none;padding:13px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;transition:.15s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(109,94,252,.32)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);flex:0 0 auto;padding:13px 18px;box-shadow:none}
+  .btn.ghost:hover{background:var(--bg2);box-shadow:none}
+
+  textarea{width:100%;min-height:110px;background:var(--bg2);border:1px solid var(--line);color:var(--txt);padding:12px 13px;border-radius:9px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--acc)}
+  .split2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:520px){.split2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="logo">SG<span>AX</span></div>
+    <div class="sub">Калькулятор стоимости размещений · внутренний инструмент и клиентская версия</div>
+  </header>
+
+  <h1>Расчёт бюджета кампании</h1>
+  <p class="lead">Считает цену клиенту, твою маржу и показывает предупреждения, если сделка невыгодна. Для клиента — включи режим «клиентская версия», маржа скроется.</p>
+
+  <div class="cols">
+
+    <!-- ЛЕВАЯ КОЛОНКА -->
+    <div>
+      <div class="panel">
+        <div class="ptitle">1 · Площадка и объём</div>
+
+        <div class="field">
+          <label>Средние просмотры поста</label>
+          <input type="number" id="views" value="6000" min="100" step="100">
+          <div class="hint">Бери из статистики за последние 5–10 постов площадки, не «подписчики × коэффициент».</div>
+        </div>
+
+        <div class="field">
+          <label>Закупочная цена за просмотр (CPV площадки), ₽</label>
+          <input type="number" id="cpvCost" value="0.5" min="0.05" max="3" step="0.05">
+          <div class="hint">Сколько платишь площадке. Типичный диапазон для RU-каналов среднего размера — 0,4–1,2 ₽.</div>
+        </div>
+
+        <div class="field">
+          <label>Количество размещений</label>
+          <input type="range" id="posts" min="1" max="20" value="5">
+          <div class="rv"><span>1</span><span><b id="postsVal">5</b></span><span>20</span></div>
+        </div>
+
+        <div class="field">
+          <label>Формат подачи</label>
+          <select id="format">
+            <option value="1">Стандартный рекламный пост</option>
+            <option value="1.6" selected>Нативная интеграция</option>
+            <option value="2.4">Брендированная рубрика (разово)</option>
+          </select>
+          <div class="hint">Множитель к цене площадки: 1 / 1,6 / 2,4.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">2 · Опции размещения</div>
+        <div class="checks" style="margin-bottom:14px">
+          <label class="chk"><input type="checkbox" id="noDelete"><span>Без удаления<em>×1,7</em></span></label>
+          <label class="chk"><input type="checkbox" id="pin"><span>Закрепление 24 ч<em>×1,4</em></span></label>
+          <label class="chk"><input type="checkbox" id="urgent"><span>Срочность<em>×1,2</em></span></label>
+          <label class="chk"><input type="checkbox" id="series" checked><span>Серия 3+ размещений<em>−10%</em></span></label>
+        </div>
+
+        <div class="ptitle" style="margin-top:22px">Дополнительно</div>
+        <div class="ogrid">
+          <label class="opt" id="o-none"><input type="radio" name="extra" value="none" checked>Нет<small>без допов</small></label>
+          <label class="opt" id="o-pinghere"><input type="radio" name="extra" value="0.4">Пинг @here<small>+40%</small></label>
+          <label class="opt" id="o-pingevery"><input type="radio" name="extra" value="0.6">@everyone<small>+60%</small></label>
+          <label class="opt" id="o-channel"><input type="radio" name="extra" value="0.15">Выбор канала<small>+15%</small></label>
+          <label class="opt" id="o-excl"><input type="radio" name="extra" value="0.5">Эксклюзив<small>+50%</small></label>
+          <label class="opt" id="o-none2"><input type="radio" name="extra" value="-0.15">Серия 5+<small>−15%</small></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">3 · Креатив и наценка</div>
+
+        <div class="field">
+          <label>Производство креатива</label>
+          <select id="creative">
+            <option value="0">Креатив клиента — 0 ₽</option>
+            <option value="3000">Базовая редактура — 3 000 ₽ за ед.</option>
+            <option value="9000" selected>Текст под площадку — 9 000 ₽ за ед.</option>
+            <option value="15000">Текст + визуал — 15 000 ₽ за ед.</option>
+            <option value="25000">Нативная подача — 25 000 ₽ за ед.</option>
+            <option value="60000">Концепция рубрики — 60 000 ₽ разово</option>
+          </select>
+          <div class="hint">«Разово» — цена не умножается на количество размещений.</div>
+        </div>
+
+        <div class="field">
+          <label>Наценка SGAX на размещения, %</label>
+          <input type="range" id="markup" min="10" max="60" value="30" step="1">
+          <div class="rv"><span>10%</span><span><b id="markupVal">30%</b></span><span>60%</span></div>
+        </div>
+
+        <div class="split2">
+          <div class="field">
+            <label>Мин. чек, ₽</label>
+            <input type="number" id="minCheck" value="15000" step="1000">
+          </div>
+          <div class="field">
+            <label>Мин. маржа, %</label>
+            <input type="number" id="minMargin" value="20" step="1">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ПРАВАЯ КОЛОНКА -->
+    <div class="res">
+      <div class="panel">
+        <div class="ptitle">Результат</div>
+        <div class="total" id="total">—</div>
+        <div class="rangelbl" id="range">&nbsp;</div>
+
+        <div class="bars">
+          <div class="b"><span>Размещения (клиенту)</span><b id="bPlace">—</b></div>
+          <div class="b"><span>Креатив</span><b id="bCreative">—</b></div>
+          <div class="b tot"><span>Итого клиенту</span><span id="bTotal">—</span></div>
+        </div>
+
+        <div class="bar" id="bar"><i id="barPlace" style="background:var(--acc)"></i><i id="barCreat" style="background:var(--acc2)"></i></div>
+
+        <div class="bars" style="margin-top:14px;border-top:none;padding-top:0">
+          <div class="b"><span>Выплаты площадке</span><b id="bCost">—</b></div>
+          <div class="b"><span>Себестоимость креатива</span><b id="bCreatCost">—</b></div>
+          <div class="b marg"><span>Маржа</span><b id="bMargin">—</b></div>
+          <div class="b"><span>Маржинальность</span><b id="bMarginPct">—</b></div>
+          <div class="b"><span>Прогноз охвата</span><b id="bReach">—</b></div>
+          <div class="b"><span>CPV клиенту</span><b id="bCpvOut">—</b></div>
+        </div>
+
+        <div class="alert" id="alert"></div>
+
+        <div class="btnrow">
+          <button class="btn" id="copyBtn">Скопировать расчёт</button>
+          <button class="btn ghost" id="clientBtn">Клиент</button>
+        </div>
+        <div class="note" id="modeNote">Внутренний режим: видны маржа и закупочные цены.</div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">Текст для клиента</div>
+        <textarea id="out" readonly></textarea>
+        <div class="mini">Готово к вставке в Telegram или в КП.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  var views=$('views'), cpvCost=$('cpvCost'), posts=$('posts'), format=$('format'),
+      noDelete=$('noDelete'), pin=$('pin'), urgent=$('urgent'), series=$('series'),
+      creative=$('creative'), markup=$('markup'), minCheck=$('minCheck'), minMargin=$('minMargin');
+
+  var clientMode = false;
+
+  function money(n){
+    return Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g,' ') + ' ₽';
+  }
+  function num(n, d){
+    return n.toFixed(d).replace('.',',');
+  }
+  function money2(n){
+    return n.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/\u00A0/g,' ') + ' ₽';
+  }
+
+  function extraMult(){
+    var r = document.querySelector('input[name=extra]:checked');
+    return 1 + parseFloat(r.value);
+  }
+
+  function calc(){
+    var v = Math.max(100, parseFloat(views.value) || 0);
+    var p = parseInt(posts.value,10);
+    var cCost = Math.max(0.01, parseFloat(cpvCost.value) || 0);
+    var fmt = parseFloat(format.value);
+    var mk = parseFloat(markup.value)/100;
+    var creat = parseFloat(creative.value);
+    var creatIsOnce = (creat === 60000);
+    var base = parseFloat(minCheck.value) || 0;
+    var minM = (parseFloat(minMargin.value) || 0)/100;
+
+    // множители формата
+    var m = fmt;
+    if (noDelete.checked) m *= 1.7;
+    if (pin.checked) m *= 1.4;
+    if (urgent.checked) m *= 1.2;
+    m *= extraMult();
+
+    // цена клиенту за одно размещение
+    var oneCost = v * cCost * m;                 // закупка у площадки
+    var onePrice = oneCost * (1 + mk);           // клиенту
+
+    var placeTotal = onePrice * p;
+    if (series.checked && p >= 3) placeTotal *= 0.9;   // скидка уходит из маржи
+
+    // креатив: первый по полной, повторы −50%
+    var creatTotal;
+    if (creatIsOnce) creatTotal = creat;
+    else creatTotal = p > 0 ? creat + creat * 0.5 * (p - 1) : 0;
+
+    var total = placeTotal + creatTotal;
+
+    // себестоимость — скидку площадка не даёт, поэтому cost без скидки
+    var costTotal = oneCost * p;
+    var creatCost = creatTotal * 0.35;
+
+    var margin = total - costTotal - creatCost;
+    var marginPct = total > 0 ? margin / total : 0;
+
+    var reach = v * p;
+    var cpvOut = placeTotal / (reach || 1);
+
+    // вывод
+    $('postsVal').textContent = p;
+    $('markupVal').textContent = Math.round(mk*100) + '%';
+    $('total').textContent = money(total);
+    $('range').textContent = 'от ' + money(total*0.88) + ' до ' + money(total*1.12);
+
+    $('bPlace').textContent = money(placeTotal);
+    $('bCreative').textContent = creatTotal ? money(creatTotal) : '—';
+    $('bTotal').textContent = money(total);
+
+    $('bCost').textContent = money(costTotal);
+    $('bCreatCost').textContent = creatCost ? money(creatCost) : '—';
+    $('bMargin').textContent = money(margin);
+    $('bMarginPct').textContent = (marginPct*100).toFixed(1).replace('.',',') + '%';
+    $('bReach').textContent = Math.round(reach).toLocaleString('ru-RU').replace(/\u00A0/g,' ');
+    $('bCpvOut').textContent = money2(cpvOut);
+
+    var wP = total > 0 ? (placeTotal/total)*100 : 0;
+    var wC = total > 0 ? (creatTotal/total)*100 : 0;
+    $('barPlace').style.width = wP + '%';
+    $('barCreat').style.width = wC + '%';
+
+    // алерты
+    var alertEl = $('alert');
+    alertEl.className = 'alert';
+    if (total < base) {
+      alertEl.className = 'alert warn';
+      alertEl.textContent = 'Итог ниже минимального чека (' + money(base) + '). Предложи пакет из нескольких площадок или другой формат.';
+    } else if (marginPct < minM) {
+      alertEl.className = 'alert bad';
+      alertEl.textContent = 'Маржинальность ' + (marginPct*100).toFixed(1).replace('.',',') + '% ниже порога ' + (minM*100).toFixed(0) + '%. Повысь наценку до ' + Math.ceil(((1/(1-minM))-1)*100) + '%+ или убери скидку за серию.';
+    } else if (marginPct < minM + 0.08) {
+      alertEl.className = 'alert warn';
+      alertEl.textContent = 'Маржа близка к нижней границе. Сделка допустима, но без запаса на правки и переносы.';
+    } else {
+      alertEl.className = 'alert ok';
+      alertEl.textContent = 'Сделка проходит по минимальному чеку и по марже.';
+    }
+
+    // текст для клиента
+    var fmtName = format.options[format.selectedIndex].text;
+    var opts = [];
+    if (noDelete.checked) opts.push('без удаления');
+    if (pin.checked) opts.push('закрепление 24 ч');
+    if (urgent.checked) opts.push('срочный запуск');
+    var extraName = document.querySelector('input[name=extra]:checked').parentNode.textContent.replace(/\s+/g,' ').trim();
+
+    var lines = [];
+    lines.push('SGAX — расчёт кампании');
+    lines.push('');
+    lines.push('Формат: ' + fmtName);
+    lines.push('Размещений: ' + p);
+    lines.push('Средний охват одного поста: ' + Math.round(v).toLocaleString('ru-RU').replace(/\u00A0/g,' '));
+    if (opts.length) lines.push('Опции: ' + opts.join(', '));
+    if (extraName.indexOf('Нет') !== 0) lines.push('Дополнительно: ' + extraName);
+    lines.push('Прогноз охвата: ' + Math.round(reach).toLocaleString('ru-RU').replace(/\u00A0/g,' ') + ' просмотров');
+    lines.push('');
+    lines.push('Стоимость:');
+    lines.push('— размещения: ' + money(placeTotal));
+    if (creatTotal) lines.push('— производство креативов: ' + money(creatTotal));
+    lines.push('— итого: ' + money(total));
+    lines.push('');
+    lines.push('Входит: подбор площадок, согласование, контроль выхода, скриншоты и отчёт по каждому размещению.');
+    lines.push('Срок: медиаплан 48 ч, первая публикация — 3 рабочих дня после оплаты.');
+    if (!clientMode) {
+      lines.push('');
+      lines.push('— — —');
+      lines.push('ВНУТРЕННЕЕ: маржа ' + money(margin) + ' (' + (marginPct*100).toFixed(1).replace('.',',') + '%), CPV клиенту ' + money2(cpvOut));
+    }
+    $('out').value = lines.join('\n');
+
+    // режим
+    var ids = ['bCost','bCreatCost','bMargin','bMarginPct'];
+    ids.forEach(function(id){ $(id).parentNode.style.display = clientMode ? 'none' : 'flex'; });
+    $('modeNote').textContent = clientMode
+      ? 'Клиентский режим: маржа и закупочные цены скрыты. Можно показывать с экрана.'
+      : 'Внутренний режим: видны маржа и закупочные цены.';
+    $('clientBtn').textContent = clientMode ? 'Внутр.' : 'Клиент';
+  }
+
+  // подсветка опций
+  function paintOpts(){
+    document.querySelectorAll('.opt').forEach(function(o){
+      o.classList.toggle('on', o.querySelector('input').checked);
+    });
+  }
+  document.querySelectorAll('.opt input').forEach(function(r){
+    r.addEventListener('change', function(){ paintOpts(); calc(); });
+  });
+
+  var inputs = ['views','cpvCost','posts','format','noDelete','pin','urgent','series','creative','markup','minCheck','minMargin'];
+  inputs.forEach(function(id){
+    var el = $(id);
+    el.addEventListener('input', calc);
+    el.addEventListener('change', calc);
+  });
+
+  $('clientBtn').addEventListener('click', function(){
+    clientMode = !clientMode;
+    calc();
+  });
+
+  $('copyBtn').addEventListener('click', function(){
+    var t = $('out');
+    t.select();
+    t.setSelectionRange(0, 99999);
+    try { document.execCommand('copy'); } catch(e){}
+    var b = $('copyBtn');
+    var old = b.textContent;
+    b.textContent = 'Скопировано';
+    setTimeout(function(){ b.textContent = old; }, 1400);
+  });
+
+  paintOpts();
+  calc();
+})();
+</script>
+</body>
+</html>

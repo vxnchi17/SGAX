@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGAX — калькулятор сделки: владельцу / нам</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#08090d;--bg2:#0f1119;--card:#151823;--card2:#191d29;--line:#232739;
+    --txt:#e9ecf6;--muted:#868da6;--dim:#5c6377;
+    --acc:#6d5efc;--acc2:#00e0b8;--owner:#ff8a5c;--warn:#ffb347;--red:#ff5c7a;
+  }
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;padding:0 0 70px}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 22px}
+  header{padding:30px 0 22px;border-bottom:1px solid var(--line);margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
+  .logo{font-size:21px;font-weight:900;letter-spacing:.06em}
+  .logo span{color:var(--acc)}
+  .sub{color:var(--muted);font-size:13.5px;margin-top:4px}
+  .hdr-tag{font-size:12px;color:var(--dim);text-align:right}
+
+  h1{font-size:clamp(21px,2.8vw,28px);font-weight:800;letter-spacing:-.02em;margin-bottom:6px}
+  .lead{color:var(--muted);font-size:14.5px;max-width:720px;margin-bottom:26px}
+
+  .cols{display:grid;grid-template-columns:1.2fr .8fr;gap:20px;align-items:start}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:22px}
+  .panel + .panel{margin-top:18px}
+  .ptitle{font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--acc2);font-weight:800;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+
+  /* TABS */
+  .tabs{display:flex;gap:6px;background:var(--bg2);padding:5px;border-radius:11px;margin-bottom:18px;border:1px solid var(--line)}
+  .tab{flex:1;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;text-align:center;transition:.15s;border:none;background:none;font-family:inherit}
+  .tab.on{background:var(--acc);color:#fff}
+  .tab:hover:not(.on){color:var(--txt)}
+
+  /* PLATFORM ROWS */
+  .prow{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:13px;margin-bottom:10px}
+  .prow .top{display:flex;gap:8px;align-items:center;margin-bottom:9px}
+  .prow .nm{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--txt);font-size:14px;font-weight:700;font-family:inherit;padding:3px 0}
+  .prow .nm:focus{outline:none;border-bottom-color:var(--acc)}
+  .del{background:rgba(255,92,122,.12);border:1px solid rgba(255,92,122,.28);color:var(--red);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;font-family:inherit}
+  .del:hover{background:rgba(255,92,122,.24)}
+  .prow .fields{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:8px}
+  @media(max-width:560px){.prow .fields{grid-template-columns:1fr 1fr}}
+  .mini-l{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:4px;display:block}
+  .prow .sum{font-size:13px;color:var(--owner);font-weight:800;text-align:right;margin-top:7px}
+
+  input[type=number],select,input[type=text]{
+    width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);
+    padding:9px 11px;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;transition:.15s}
+  input[type=number]:focus,select:focus,input[type=text]:focus{outline:none;border-color:var(--acc)}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:var(--line);outline:none;margin-top:6px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg)}
+  .rv{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:5px}
+  .rv b{color:var(--txt);font-size:13px}
+
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  .field > label.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;margin-bottom:7px}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:5px;line-height:1.45}
+
+  .addbtn{width:100%;background:transparent;border:1px dashed #2e3450;color:var(--muted);padding:11px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;margin-top:4px}
+  .addbtn:hover{border-color:var(--acc);color:var(--acc)}
+
+  .presets{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+  .preset{background:rgba(109,94,252,.1);border:1px solid rgba(109,94,252,.28);color:#b9aeff;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+  .preset:hover{background:rgba(109,94,252,.22)}
+
+  /* RESULT */
+  .res{position:sticky;top:20px}
+  .bigbox{background:linear-gradient(165deg,rgba(109,94,252,.13),var(--card) 55%);border:1px solid rgba(109,94,252,.35)}
+
+  .clientpay{text-align:center;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .clientpay .cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .clientpay .val{font-size:clamp(28px,4vw,38px);font-weight:900;letter-spacing:-.03em;line-height:1.15;margin-top:3px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:11px;overflow:hidden;margin-top:14px}
+  .split > div{background:var(--card2);padding:15px 13px;text-align:center}
+  .split .cap{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-bottom:5px}
+  .split .v{font-size:clamp(19px,2.5vw,25px);font-weight:900;letter-spacing:-.02em;line-height:1.15}
+  .split .owner .cap{color:var(--owner)}
+  .split .owner .v{color:var(--owner)}
+  .split .us .cap{color:var(--acc2)}
+  .split .us .v{color:var(--acc2)}
+  .split .pct{font-size:11px;color:var(--dim);margin-top:2px}
+
+  .stackbar{height:12px;border-radius:99px;overflow:hidden;display:flex;background:var(--bg2);margin-top:14px;border:1px solid var(--line)}
+  .stackbar i{display:block;height:100%;transition:width .25s}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .bars{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+  .b{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;color:var(--muted)}
+  .b b{color:var(--txt);font-weight:700}
+  .b.hi b{color:var(--acc2)}
+  .b.bad b{color:var(--red)}
+
+  .alert{margin-top:14px;border-radius:9px;padding:11px 13px;font-size:12.5px;line-height:1.45;display:none}
+  .alert.warn{background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.32);color:var(--warn);display:block}
+  .alert.bad{background:rgba(255,92,122,.1);border:1px solid rgba(255,92,122,.32);color:var(--red);display:block}
+  .alert.ok{background:rgba(0,224,184,.09);border:1px solid rgba(0,224,184,.28);color:var(--acc2);display:block}
+
+  .goal{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:14px}
+  .goal .cap{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:9px}
+  .goalres{font-size:14px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .goalres b{color:var(--txt)}
+  .goalres .big{font-size:22px;font-weight:900;color:var(--warn);display:block;margin:2px 0}
+
+  .btnrow{display:flex;gap:8px;margin-top:16px}
+  .btn{flex:1;background:var(--acc);color:#fff;border:none;padding:12px;border-radius:9px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit;transition:.15s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(109,94,252,.3)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);flex:0 0 auto;padding:12px 15px;box-shadow:none}
+  .btn.ghost:hover{background:var(--bg2);box-shadow:none}
+
+  textarea{width:100%;min-height:150px;background:var(--bg2);border:1px solid var(--line);color:var(--txt);padding:12px;border-radius:9px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.55;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--acc)}
+
+  .verdict{border-radius:12px;padding:16px 18px;margin-top:18px;font-size:13.5px;line-height:1.6}
+  .verdict h4{font-size:14px;margin-bottom:7px;font-weight:800}
+  .verdict.bad{background:rgba(255,92,122,.08);border:1px solid rgba(255,92,122,.28)}
+  .verdict.bad h4{color:var(--red)}
+  .verdict.mid{background:rgba(255,179,71,.08);border:1px solid rgba(255,179,71,.28)}
+  .verdict.mid h4{color:var(--warn)}
+  .verdict p{color:var(--muted);margin-bottom:7px}
+  .verdict p:last-child{margin-bottom:0}
+  .verdict b{color:var(--txt)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="logo">SG<span>AX</span></div>
+      <div class="sub">Калькулятор сделки · сколько платим владельцу, сколько получаем мы</div>
+    </div>
+    <div class="hdr-tag">v2 · работает и на проценте, и на наценке</div>
+  </header>
+
+  <h1>Раскладка по деньгам</h1>
+  <p class="lead">Добавляй площадки с их прайсами. Калькулятор считает: сколько получит владелец канала или сервера, сколько останется SGAX, и сколько размещений нужно, чтобы выйти на твою цель по доходу.</p>
+
+  <div class="cols">
+
+    <!-- ЛЕВАЯ КОЛОНКА -->
+    <div>
+
+      <div class="panel">
+        <div class="ptitle">1 · Площадки и их прайсы <span style="color:var(--owner);font-size:11px">выплаты владельцам</span></div>
+
+        <div id="rows"></div>
+
+        <button class="addbtn" id="addRow">+ Добавить площадку</button>
+
+        <div class="presets">
+          <button class="preset" id="pDiscord">Пример: первый Discord-админ</button>
+          <button class="preset" id="pTelegram">Пример: 3 Telegram-канала</button>
+          <button class="preset" id="pDead">Проверить: мёртвый сервер 5к</button>
+        </div>
+
+        <div class="hint" style="margin-top:12px">Цена владельца — то, что он просит за одно размещение. Всё, что мы добавляем сверху — наш заработок.</div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">2 · Наша модель заработка</div>
+
+        <div class="tabs">
+          <button class="tab on" data-mode="markup">Наценка</button>
+          <button class="tab" data-mode="commission">Процент</button>
+          <button class="tab" data-mode="fixed">Фикс</button>
+        </div>
+
+        <div id="modeMarkup" class="modeblock">
+          <div class="field">
+            <label class="lbl">Наценка сверху на выплаты владельцам</label>
+            <input type="range" id="markup" min="5" max="200" value="40" step="5">
+            <div class="rv"><span>5%</span><span><b id="markupVal">40%</b></span><span>200%</span></div>
+            <div class="hint">Владелец просит 1 500 ₽ → клиент платит 2 100 ₽ → нам 600 ₽.</div>
+          </div>
+        </div>
+
+        <div id="modeCommission" class="modeblock" style="display:none">
+          <div class="field">
+            <label class="lbl">Наша доля от цены клиенту</label>
+            <input type="range" id="commission" min="5" max="70" value="30" step="5">
+            <div class="rv"><span>5%</span><span><b id="commissionVal">30%</b></span><span>70%</span></div>
+            <div class="hint">Клиент платит 2 000 ₽ → нам 600 ₽ (30%) → владельцу 1 400 ₽. Владельцу достаётся меньше его прайса — это надо с ним согласовать.</div>
+          </div>
+        </div>
+
+        <div id="modeFixed" class="modeblock" style="display:none">
+          <div class="field">
+            <label class="lbl">Фикс с одного размещения, ₽</label>
+            <input type="number" id="fixedFee" value="500" step="100">
+            <div class="hint">Сколько добавляем к цене владельца за каждое размещение, независимо от его прайса.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">3 · Креатив и накладные</div>
+
+        <div class="field">
+          <label class="lbl">Что делаем с креативом</label>
+          <select id="creative">
+            <option value="0,0">Клиент даёт свой — ничего не берём</option>
+            <option value="3000,1000">Базовая редактура — 3 000 ₽</option>
+            <option value="9000,3000" selected>Текст под площадку — 9 000 ₽</option>
+            <option value="15000,5000">Текст + визуал — 15 000 ₽</option>
+            <option value="25000,9000">Нативная подача — 25 000 ₽</option>
+            <option value="60000,20000">Концепция рубрики — 60 000 ₽</option>
+          </select>
+          <div class="hint">Первое число — цена клиенту, второе — наша себестоимость (дизайнер, копирайтер).</div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">Креатив нужен</label>
+          <select id="creativeScope">
+            <option value="once">Один раз на кампанию</option>
+            <option value="per" selected>Под каждое размещение</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="lbl">Прочие расходы на сделку, ₽</label>
+          <input type="number" id="overhead" value="0" step="500">
+          <div class="hint">Токены ОРД, комиссия за перевод, такси до встречи — всё, что съедает маржу.</div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">Минимальная маржа, %</label>
+          <input type="number" id="minMargin" value="20" step="1">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ПРАВАЯ КОЛОНКА -->
+    <div class="res">
+      <div class="panel bigbox">
+        <div class="clientpay">
+          <div class="cap">Клиент платит</div>
+          <div class="val" id="vClient">—</div>
+        </div>
+
+        <div class="split">
+          <div class="owner">
+            <div class="cap">Владельцам</div>
+            <div class="v" id="vOwner">—</div>
+            <div class="pct" id="pOwner">—</div>
+          </div>
+          <div class="us">
+            <div class="cap">Нам</div>
+            <div class="v" id="vUs">—</div>
+            <div class="pct" id="pUs">—</div>
+          </div>
+        </div>
+
+        <div class="stackbar" id="bar">
+          <i id="barOwner" style="background:var(--owner)"></i>
+          <i id="barUs" style="background:var(--acc2)"></i>
+        </div>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--owner)"></i> владельцу площадки</span>
+          <span><i class="dot" style="background:var(--acc2)"></i> в SGAX</span>
+        </div>
+
+        <div class="bars">
+          <div class="b"><span>Размещений всего</span><b id="bCount">—</b></div>
+          <div class="b"><span>Выплаты владельцам</span><b id="bOwner">—</b></div>
+          <div class="b"><span>Креатив: цена клиенту</span><b id="bCreat">—</b></div>
+          <div class="b"><span>Креатив: себестоимость</span><b id="bCreatCost">—</b></div>
+          <div class="b"><span>Прочие расходы</span><b id="bOver">—</b></div>
+          <div class="b hi"><span>Чистыми в SGAX</span><b id="bNet">—</b></div>
+          <div class="b"><span>Маржинальность сделки</span><b id="bNetPct">—</b></div>
+          <div class="b"><span>Заработок с 1 размещения</span><b id="bPerUnit">—</b></div>
+          <div class="b"><span>Средний чек</span><b id="bAvg">—</b></div>
+        </div>
+
+        <div class="alert" id="alert"></div>
+
+        <div class="goal">
+          <div class="cap">Цель по доходу</div>
+          <div class="field" style="margin-bottom:0">
+            <input type="number" id="goal" value="100000" step="10000">
+          </div>
+          <div class="goalres" id="goalRes">—</div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" id="copyBtn">Скопировать</button>
+          <button class="btn ghost" id="clientBtn">Клиенту</button>
+        </div>
+        <div class="hint" id="modeNote">Внутренний режим: видны выплаты владельцам и маржа.</div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">Текст сделки</div>
+        <textarea id="out" readonly></textarea>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var clientMode = false;
+  var mode = 'markup';
+
+  /* ---------- данные площадок ---------- */
+  var defaults = [
+    { name:'Discord-сервер (партнёр)', price:1500, qty:1 }
+  ];
+
+  function money(n){
+    return Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g,' ') + ' ₽';
+  }
+  function money0(n){
+    return Math.round(n).toLocaleString('ru-RU').replace(/\u00A0/g,' ');
+  }
+  function pct(n){ return n.toFixed(1).replace('.',',') + '%'; }
+
+  function render(){
+    var wrap = $('rows');
+    wrap.innerHTML = '';
+    defaults.forEach(function(row, i){
+      var d = document.createElement('div');
+      d.className = 'prow';
+      d.innerHTML =
+        '<div class="top">' +
+          '<input class="nm" type="text" value="' + row.name.replace(/"/g,'&quot;') + '" placeholder="Название площадки" data-i="'+i+'" data-k="name">' +
+          '<button class="del" data-i="'+i+'">×</button>' +
+        '</div>' +
+        '<div class="fields">' +
+          '<div><span class="mini-l">Цена владельца, ₽</span><input type="number" value="'+row.price+'" step="50" data-i="'+i+'" data-k="price"></div>' +
+          '<div><span class="mini-l">Размещений</span><input type="number" value="'+row.qty+'" step="1" min="1" data-i="'+i+'" data-k="qty"></div>' +
+          '<div><span class="mini-l">Владельцу всего</span><div style="padding:9px 0;font-weight:800;color:var(--owner);font-size:14px">' + money(row.price*row.qty) + '</div></div>' +
+        '</div>';
+      wrap.appendChild(d);
+    });
+
+    wrap.querySelectorAll('input').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var i = +inp.dataset.i, k = inp.dataset.k;
+        if (k === 'qty') defaults[i][k] = Math.max(0, parseInt(inp.value,10) || 0);
+        else if (k === 'price') defaults[i][k] = Math.max(0, parseFloat(inp.value) || 0);
+        else defaults[i][k] = inp.value;
+        calc();
+        if (k === 'price' || k === 'qty') {
+          var s = wrap.querySelectorAll('.prow')[i].querySelector('.fields > div:last-child > div');
+          if (s) s.textContent = money(defaults[i].price * defaults[i].qty);
+        }
+      });
+    });
+
+    wrap.querySelectorAll('.del').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        defaults.splice(+btn.dataset.i, 1);
+        render(); calc();
+      });
+    });
+  }
+
+  /* ---------- расчёт ---------- */
+  function calc(){
+    var ownerTotal = 0, count = 0;
+    defaults.forEach(function(r){ ownerTotal += r.price * r.qty; count += r.qty; });
+
+    var clientPlace = 0;
+    if (mode === 'markup') {
+      clientPlace = ownerTotal * (1 + parseFloat($('markup').value)/100);
+    } else if (mode === 'commission') {
+      var cm = parseFloat($('commission').value)/100;
+      clientPlace = cm >= 1 ? ownerTotal : ownerTotal / (1 - cm);
+    } else {
+      clientPlace = ownerTotal + (parseFloat($('fixedFee').value)||0) * count;
+    }
+
+    var cArr = $('creative').value.split(',');
+    var cPrice = parseFloat(cArr[0]) || 0;
+    var cCost  = parseFloat(cArr[1]) || 0;
+    var scope = $('creativeScope').value;
+
+    var creatPrice = scope === 'per' ? cPrice * count : cPrice;
+    var creatCost  = scope === 'per' ? cCost  * count : cCost;
+
+    var over = parseFloat($('overhead').value) || 0;
+
+    var clientTotal = clientPlace + creatPrice;
+    var ourNet = clientTotal - ownerTotal - creatCost - over;
+    var netPct = clientTotal > 0 ? ourNet / clientTotal : 0;
+    var perUnit = count > 0 ? ourNet / count : 0;
+    var avgCheck = count > 0 ? clientTotal / count : 0;
+
+    /* вывод */
+    $('vClient').textContent = money(clientTotal);
+    $('vOwner').textContent = money(ownerTotal);
+    $('vUs').textContent = money(ourNet);
+    $('pOwner').textContent = clientTotal > 0 ? pct(ownerTotal/clientTotal*100) : '—';
+    $('pUs').textContent = clientTotal > 0 ? 'маржа ' + pct(netPct*100) : '—';
+
+    var wO = clientTotal > 0 ? ownerTotal/clientTotal*100 : 0;
+    var wU = clientTotal > 0 ? Math.max(0, ourNet)/clientTotal*100 : 0;
+    $('barOwner').style.width = wO + '%';
+    $('barUs').style.width = wU + '%';
+
+    $('bCount').textContent = count;
+    $('bOwner').textContent = money(ownerTotal);
+    $('bCreat').textContent = creatPrice ? money(creatPrice) : '—';
+    $('bCreatCost').textContent = creatCost ? money(creatCost) : '—';
+    $('bOver').textContent = over ? money(over) : '—';
+    $('bNet').textContent = money(ourNet);
+    $('bNetPct').textContent = pct(netPct*100);
+    $('bPerUnit').textContent = count ? money(perUnit) : '—';
+    $('bAvg').textContent = count ? money(avgCheck) : '—';
+
+    $('markupVal').textContent = $('markup').value + '%';
+    $('commissionVal').textContent = $('commission').value + '%';
+
+    /* алерты */
+    var minM = (parseFloat($('minMargin').value)||0)/100;
+    var a = $('alert'); a.className = 'alert';
+    if (count === 0) {
+      a.className='alert warn'; a.textContent='Добавь хотя бы одну площадку.';
+    } else if (ourNet <= 0) {
+      a.className='alert bad'; a.textContent='Сделка убыточная: мы платим владельцам и за креатив больше, чем берём с клиента. Поднимай наценку.';
+    } else if (netPct < minM) {
+      a.className='alert bad'; a.textContent='Маржа ' + pct(netPct*100) + ' ниже порога ' + (minM*100).toFixed(0) + '%. Нужна наценка минимум ' + Math.ceil(((1/(1-minM))-1)*100) + '% или дороже креатив.';
+    } else if (netPct < minM + 0.08) {
+      a.className='alert warn'; a.textContent='Маржа близко к нижней границе — запаса на правки и переносы нет.';
+    } else {
+      a.className='alert ok'; a.textContent='Сделка проходит по марже ' + pct(netPct*100) + '.';
+    }
+
+    /* цель */
+    var goal = parseFloat($('goal').value) || 0;
+    var need = perUnit > 0 ? Math.ceil(goal / perUnit) : 0;
+    var gr = $('goalRes');
+    if (perUnit <= 0) {
+      gr.innerHTML = 'При такой экономике цель недостижима.';
+    } else {
+      var perOwner = ownerTotal / count;
+      gr.innerHTML = 'Нужно таких размещений:' +
+        '<span class="big">' + need + '</span>' +
+        'По цене владельца ' + money(perOwner) + ' за штуку и нашему доходу ' + money(perUnit) + ' с одного.<br>' +
+        (need > 200 ? '<span style="color:var(--red)">Это больше 9 размещений в день. Модель не масштабируется — нужен другой чек.</span>'
+         : need > 60 ? '<span style="color:var(--warn)">Много. Проверь, реально ли столько сделок в месяц.</span>'
+         : '<span style="color:var(--acc2)">Реалистично.</span>');
+    }
+
+    /* текст */
+    var L = [];
+    L.push('SGAX — раскладка сделки');
+    L.push('');
+    L.push('Площадки:');
+    defaults.forEach(function(r){
+      L.push('· ' + (r.name||'без названия') + ' — ' + r.qty + ' × ' + money(r.price) + ' = ' + money(r.price*r.qty));
+    });
+    L.push('');
+    L.push('Размещений всего: ' + count);
+    L.push('Клиент платит: ' + money(clientTotal));
+    if (creatPrice) L.push('  из них креатив: ' + money(creatPrice));
+    L.push('Владельцам площадок: ' + money(ownerTotal));
+    if (!clientMode) {
+      L.push('');
+      L.push('— — — внутреннее — — —');
+      L.push('Себестоимость креатива: ' + money(creatCost));
+      if (over) L.push('Прочие расходы: ' + money(over));
+      L.push('Чистыми в SGAX: ' + money(ourNet) + ' (' + pct(netPct*100) + ')');
+      L.push('С одного размещения: ' + money(perUnit));
+      if (need) L.push('До цели ' + money(goal) + ': нужно ' + need + ' размещений');
+    }
+    $('out').value = L.join('\n');
+
+    var hidden = ['bOwner','bPerUnit','bNet','bNetPct','bCreatCost'];
+    hidden.forEach(function(id){ $(id).parentNode.style.display = clientMode ? 'none' : 'flex'; });
+    $('modeNote').textContent = clientMode
+      ? 'Режим «Клиенту»: выплаты владельцам и маржа скрыты.'
+      : 'Внутренний режим: видны выплаты владельцам и маржа.';
+    $('clientBtn').textContent = clientMode ? 'Внутр.' : 'Клиенту';
+  }
+
+  /* ---------- события ---------- */
+  $('addRow').addEventListener('click', function(){
+    defaults.push({ name:'Новая площадка', price:1000, qty:1 });
+    render(); calc();
+  });
+
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+      t.classList.add('on');
+      mode = t.dataset.mode;
+      $('modeMarkup').style.display = mode==='markup' ? 'block':'none';
+      $('modeCommission').style.display = mode==='commission' ? 'block':'none';
+      $('modeFixed').style.display = mode==='fixed' ? 'block':'none';
+      calc();
+    });
+  });
+
+  ['markup','commission','fixedFee','creative','creativeScope','overhead','minMargin','goal'].forEach(function(id){
+    $(id).addEventListener('input', calc);
+    $(id).addEventListener('change', calc);
+  });
+
+  $('clientBtn').addEventListener('click', function(){
+    clientMode = !clientMode; calc();
+  });
+
+  $('copyBtn').addEventListener('click', function(){
+    var t = $('out'); t.select(); t.setSelectionRange(0, 99999);
+    try { document.execCommand('copy'); } catch(e){}
+    var b = $('copyBtn'), old = b.textContent;
+    b.textContent = 'Скопировано';
+    setTimeout(function(){ b.textContent = old; }, 1400);
+  });
+
+  /* пресеты */
+  $('pDiscord').addEventListener('click', function(){
+    defaults = [
+      { name:'Discord · @everyone', price:1500, qty:1 },
+      { name:'Discord · @here', price:1300, qty:2 },
+      { name:'Discord · текст', price:800, qty:2 }
+    ];
+    render(); calc();
+  });
+
+  $('pTelegram').addEventListener('click', function(){
+    defaults = [
+      { name:'TG · канал 40к, натив', price:12000, qty:1 },
+      { name:'TG · канал 20к, пост', price:6000, qty:2 },
+      { name:'TG · канал 8к, пост', price:2500, qty:3 }
+    ];
+    render(); calc();
+  });
+
+  $('pDead').addEventListener('click', function(){
+    defaults = [ { name:'Мёртвый Discord 5к · @everyone', price:1500, qty:1 } ];
+    render(); calc();
+  });
+
+  render();
+  calc();
+})();
+</script>
+</body>
+</html>

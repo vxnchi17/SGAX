@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGAX — калькулятор пакета</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#06070b;--bg2:#0c0e15;--card:#12151d;--card2:#171b25;--card3:#1d222f;--line:#232838;--line2:#2e3448;
+    --txt:#e9ecf6;--muted:#868da6;--dim:#5c6377;
+    --acc:#6d5efc;--acc2:#00e0b8;--owner:#ff8a5c;--warn:#ffb347;--red:#ff5c7a;--gold:#ffd166;
+  }
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:96px}
+  body.locked{overflow:hidden}
+
+  /* ============ SPLASH ============ */
+  #splash{position:fixed;inset:0;z-index:999;background:#05060a;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .5s,visibility .5s;padding:24px;text-align:center}
+  #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+  #splash:before{content:'';position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(109,94,252,.2),transparent 62%);top:-280px;left:50%;transform:translateX(-50%)}
+  #splash:after{content:'';position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(0,224,184,.12),transparent 62%);bottom:-250px;left:15%}
+  .s-in{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;animation:sin .8s cubic-bezier(.16,1,.3,1) both}
+  @keyframes sin{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:none}}
+  .s-logo{width:100px;height:100px;margin-bottom:22px;filter:drop-shadow(0 14px 40px rgba(109,94,252,.4))}
+  .s-logo svg{width:100%;height:100%;display:block}
+  .s-word{font-size:clamp(34px,6.4vw,52px);font-weight:900;letter-spacing:.14em;line-height:1;margin-bottom:12px}
+  .s-word span{background:linear-gradient(96deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .s-tag{font-size:clamp(12.5px,1.6vw,15px);color:var(--muted);margin-bottom:32px;max-width:400px}
+  .s-line{width:60px;height:2px;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:2px;margin-bottom:30px;opacity:.8}
+  .s-btn{background:linear-gradient(96deg,var(--acc),#5a4bf0);color:#fff;border:none;padding:15px 40px;border-radius:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:.2s;box-shadow:0 12px 32px rgba(109,94,252,.32)}
+  .s-btn:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(109,94,252,.48)}
+  .s-foot{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:11px;color:#3a4053;letter-spacing:.1em;text-transform:uppercase;z-index:2}
+
+  /* ============ TOP ============ */
+  header{position:sticky;top:0;z-index:60;background:rgba(6,7,11,.94);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  .hrow{max-width:1120px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .brand .mk{width:30px;height:30px}
+  .brand .mk svg{width:100%;height:100%;display:block}
+  .brand .nm{font-size:15.5px;font-weight:900;letter-spacing:.1em;line-height:1.05}
+  .brand .nm span{background:linear-gradient(96deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand .sub{font-size:9.5px;color:var(--dim);letter-spacing:.03em}
+  .hchips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+  .chip{font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:6px;white-space:nowrap;background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+  .chip b{color:var(--txt)}
+  .chip.ok{border-color:rgba(0,224,184,.3);color:var(--acc2)}
+  .chip.wr{border-color:rgba(255,179,71,.3);color:var(--warn)}
+
+  /* ============ LAYOUT ============ */
+  .app{max-width:1120px;margin:0 auto;padding:22px 20px;display:grid;grid-template-columns:236px 1fr;gap:22px;align-items:start}
+  @media(max-width:880px){.app{grid-template-columns:1fr;gap:14px}}
+
+  /* ============ STEPPER ============ */
+  .stepper{position:sticky;top:70px;display:flex;flex-direction:column;gap:3px}
+  @media(max-width:880px){.stepper{position:static;flex-direction:row;overflow-x:auto;padding-bottom:6px;gap:6px}}
+  .sitem{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;transition:.14s;background:none;font-family:inherit;text-align:left;width:100%}
+  .sitem:hover{background:var(--card2)}
+  .sitem.on{background:rgba(109,94,252,.13);border-color:rgba(109,94,252,.36)}
+  .sitem.done .sn{background:rgba(0,224,184,.16);color:var(--acc2);border-color:rgba(0,224,184,.3)}
+  .sn{width:21px;height:21px;border-radius:6px;background:var(--card3);border:1px solid var(--line2);color:var(--dim);font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .sitem.on .sn{background:var(--acc);border-color:var(--acc);color:#fff}
+  .stxt{min-width:0}
+  .stxt .st{font-size:12.5px;font-weight:800;line-height:1.25}
+  .sitem.on .stxt .st{color:#fff}
+  .stxt .sd{font-size:10px;color:var(--dim);line-height:1.3;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+  @media(max-width:880px){.stxt .sd{display:none}}
+
+  /* ============ STAGE ============ */
+  .stage{min-height:60vh}
+  .page{animation:pin .22s ease both}
+  @keyframes pin{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  .htitle{font-size:21px;font-weight:900;letter-spacing:-.02em;margin-bottom:4px}
+  .hsub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+
+  .block{background:var(--card);border:1px solid var(--line);border-radius:13px;margin-bottom:12px;overflow:hidden}
+  .bhead{padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;user-select:none;transition:.14s}
+  .bhead:hover{background:var(--card2)}
+  .bhead .bl{display:flex;align-items:center;gap:9px;min-width:0}
+  .bnum{width:19px;height:19px;border-radius:5px;background:rgba(109,94,252,.16);color:#b9aeff;font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .bhead .bt{font-size:13px;font-weight:800}
+  .bhead .bs{font-size:10.5px;color:var(--dim);margin-top:1px}
+  .bhead .br{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .bbadge{font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;background:var(--card3);color:var(--muted)}
+  .bbadge.ok{background:rgba(0,224,184,.13);color:var(--acc2)}
+  .bbadge.wr{background:rgba(255,179,71,.13);color:var(--warn)}
+  .bchev{color:var(--dim);font-size:11px;transition:.2s}
+  .block.open .bchev{transform:rotate(90deg)}
+  .bbody{display:none;padding:0 16px 16px;border-top:1px solid var(--line)}
+  .block.open .bbody{display:block}
+
+  .frow{margin-top:13px}
+  .frow:first-child{margin-top:14px}
+  .flabel{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:800;margin-bottom:6px;display:block}
+  .fhint{font-size:10.5px;color:var(--dim);margin-top:5px;line-height:1.45}
+  input,select,textarea{font-family:inherit;font-size:13.5px;font-weight:600;color:var(--txt);background:var(--card2);border:1px solid var(--line2);border-radius:8px;padding:9px 11px;width:100%;transition:.14s}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);background:var(--card3)}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:var(--line2);padding:0;border:none;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--acc);cursor:pointer;border:3px solid var(--bg);box-shadow:0 0 0 1px var(--acc)}
+  select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23868da6' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;background-size:10px;padding-right:30px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  @media(max-width:600px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  /* список выбора (пилюли) */
+  .pick{display:flex;flex-wrap:wrap;gap:6px}
+  .pk{font-size:12px;font-weight:700;padding:8px 13px;border-radius:8px;background:var(--card2);border:1px solid var(--line2);color:var(--muted);cursor:pointer;font-family:inherit;transition:.13s}
+  .pk:hover{border-color:#3d465e;color:var(--txt)}
+  .pk.on{background:rgba(109,94,252,.2);border-color:var(--acc);color:#c9c1ff}
+
+  /* строка допродажи */
+  .optrow{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;background:var(--card2);border:1px solid var(--line);margin-bottom:6px;cursor:pointer;transition:.13s}
+  .optrow:hover{border-color:var(--line2)}
+  .optrow.on{background:rgba(109,94,252,.12);border-color:rgba(109,94,252,.45)}
+  .obox{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--line2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:transparent;transition:.13s}
+  .optrow.on .obox{background:var(--acc);border-color:var(--acc);color:#fff}
+  .oname{font-size:12.5px;font-weight:700;flex:1;min-width:0}
+  .oname span{display:block;font-size:10px;color:var(--dim);font-weight:500;margin-top:1px}
+  .oprice{font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap}
+  .optrow.on .oprice{color:var(--acc2)}
+
+  /* список площадок */
+  .plist{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .pitem{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:11px;cursor:pointer;transition:.14s}
+  .pitem:hover{border-color:var(--acc);background:var(--card2)}
+  .pitem .pnum{width:26px;height:26px;border-radius:7px;background:rgba(109,94,252,.16);color:#b9aeff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .pitem .pinfo{flex:1;min-width:0}
+  .pitem .pnm{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pitem .pmeta{font-size:10.5px;color:var(--dim);margin-top:2px}
+  .pitem .pval{text-align:right;flex-shrink:0}
+  .pitem .pval b{display:block;font-size:13.5px;color:var(--owner);font-weight:900}
+  .pitem .pval span{font-size:10px;color:var(--dim)}
+  .pitem .parrow{color:var(--dim);font-size:14px;flex-shrink:0}
+  .pstat{font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:6px}
+  .pstat.ok{background:rgba(0,224,184,.14);color:var(--acc2)}
+  .pstat.wait{background:rgba(255,179,71,.14);color:var(--warn)}
+  .pstat.no{background:rgba(255,92,122,.14);color:var(--red)}
+
+  .addrow{display:flex;gap:8px;flex-wrap:wrap}
+  .abtn{background:transparent;border:1px dashed #333c53;color:var(--muted);padding:11px 15px;border-radius:9px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;transition:.14s;flex:1;min-width:140px}
+  .abtn:hover{border-color:var(--acc);color:var(--acc);background:rgba(109,94,252,.06)}
+
+  .backbtn{background:none;border:none;color:var(--muted);font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;padding:0 0 14px;display:flex;align-items:center;gap:6px}
+  .backbtn:hover{color:var(--txt)}
+
+  .totalrow{display:flex;justify-content:space-between;align-items:center;background:var(--card3);border:1px solid var(--line2);border-radius:9px;padding:11px 14px;margin-top:14px;gap:12px;flex-wrap:wrap}
+  .totalrow .tl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+  .totalrow .tv{font-size:15px;font-weight:900;color:var(--owner)}
+
+  /* карточка тарифа */
+  .tcard{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:15px;cursor:pointer;transition:.15s;position:relative;text-align:left;font-family:inherit;width:100%;display:block}
+  .tcard:hover{border-color:var(--line2);background:var(--card2)}
+  .tcard.on{border-color:var(--acc);background:linear-gradient(160deg,rgba(109,94,252,.15),var(--card) 65%)}
+  .tcard.on:after{content:'✓';position:absolute;top:12px;right:14px;color:var(--acc);font-weight:900;font-size:14px}
+  .tcard .tn{font-size:14px;font-weight:900;margin-bottom:3px}
+  .tcard .tp{font-size:26px;font-weight:900;letter-spacing:-.03em;color:var(--gold);line-height:1.1}
+  .tcard.on .tp{color:#c9c1ff}
+  .tcard .td{font-size:11px;color:var(--dim);margin-top:5px;line-height:1.4}
+
+  /* услуги */
+  .exrow{display:grid;grid-template-columns:1.5fr .9fr .9fr 30px;gap:7px;margin-bottom:7px;align-items:center}
+  @media(max-width:600px){.exrow{grid-template-columns:1fr 1fr;}}
+
+  /* итог */
+  .sumhero{background:linear-gradient(165deg,rgba(109,94,252,.15),var(--card) 55%);border:1px solid rgba(109,94,252,.34);border-radius:14px;padding:22px;text-align:center;margin-bottom:12px}
+  .sumhero .cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .sumhero .val{font-size:clamp(30px,5vw,42px);font-weight:900;letter-spacing:-.03em;margin-top:3px;line-height:1.1}
+  .sumhero .sub{font-size:11.5px;color:var(--dim);margin-top:4px}
+  .s2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:11px;overflow:hidden;margin-top:14px}
+  .s2>div{background:var(--card2);padding:14px 10px;text-align:center}
+  .s2 .c{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;margin-bottom:4px}
+  .s2 .v{font-size:clamp(17px,2.4vw,23px);font-weight:900;letter-spacing:-.02em}
+  .s2 .own .c,.s2 .own .v{color:var(--owner)}
+  .s2 .us .c,.s2 .us .v{color:var(--acc2)}
+  .s2 .p{font-size:10px;color:var(--dim);margin-top:2px}
+
+  .brow{display:flex;justify-content:space-between;padding:7px 0;font-size:12.5px;color:var(--muted);gap:12px;border-bottom:1px solid rgba(35,40,56,.6)}
+  .brow:last-child{border-bottom:none}
+  .brow b{color:var(--txt);font-weight:700;white-space:nowrap}
+  .brow.sub{padding-left:12px;font-size:11.5px;color:var(--dim)}
+  .brow.hi{border-top:1px solid var(--line);border-bottom:none;margin-top:6px;padding-top:10px;font-size:14px;color:var(--txt);font-weight:800}
+  .brow.hi b{color:var(--acc2);font-size:15px}
+
+  .alert{border-radius:9px;padding:11px 13px;font-size:11.5px;line-height:1.45;margin-top:12px}
+  .alert.ok{background:rgba(0,224,184,.08);border:1px solid rgba(0,224,184,.26);color:var(--acc2)}
+  .alert.warn{background:rgba(255,179,71,.09);border:1px solid rgba(255,179,71,.3);color:var(--warn)}
+  .alert.bad{background:rgba(255,92,122,.09);border:1px solid rgba(255,92,122,.3);color:var(--red)}
+
+  .actbtn{background:var(--acc);color:#fff;border:none;padding:12px;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s;width:100%}
+  .actbtn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(109,94,252,.3)}
+  .actbtn.g{background:transparent;border:1px solid var(--line2);color:var(--txt);box-shadow:none}
+  .actbtn.g:hover{background:var(--card2);box-shadow:none}
+  .actbtn.o{background:rgba(255,138,92,.14);border:1px solid rgba(255,138,92,.34);color:var(--owner)}
+  .actbtn.o:hover{background:rgba(255,138,92,.24);box-shadow:none}
+  .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+
+  .checkrow{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:12px;color:var(--muted);line-height:1.4}
+  .checkrow i{font-style:normal;font-weight:900;flex-shrink:0;width:13px}
+  .checkrow i.ok{color:var(--acc2)}.checkrow i.wr{color:var(--warn)}.checkrow i.bd{color:var(--red)}
+
+  /* ============ FOOTBAR ============ */
+  .footbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:rgba(8,9,14,.96);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+  .fbin{max-width:1120px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .fnums{display:flex;gap:16px;flex-wrap:wrap;flex:1;min-width:0}
+  .fn{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:800;line-height:1.2}
+  .fn b{display:block;font-size:14px;letter-spacing:0;text-transform:none;color:var(--txt);margin-top:1px;white-space:nowrap}
+  .fn.own b{color:var(--owner)}
+  .fn.us b{color:var(--acc2)}
+  .fbtns{display:flex;gap:7px;margin-left:auto}
+  .fbtn{background:var(--card2);border:1px solid var(--line2);color:var(--txt);padding:10px 16px;border-radius:9px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.14s;white-space:nowrap}
+  .fbtn:hover{background:var(--card3)}
+  .fbtn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .fbtn.pri:hover{background:#5d4ff0;box-shadow:0 6px 18px rgba(109,94,252,.3)}
+  .fbtn:disabled{opacity:.35;cursor:not-allowed}
+
+  /* ============ MODAL ============ */
+  .modal{position:fixed;inset:0;z-index:200;background:rgba(4,5,9,.8);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal.open{display:flex}
+  .mbox{background:var(--card);border:1px solid var(--line);border-radius:15px;max-width:700px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;animation:min .26s cubic-bezier(.16,1,.3,1)}
+  @keyframes min{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+  .mhead{padding:15px 19px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .mhead h3{font-size:14.5px;font-weight:800}
+  .mclose{background:var(--card2);border:1px solid var(--line2);color:var(--muted);width:29px;height:29px;border-radius:7px;cursor:pointer;font-size:16px;line-height:1;font-family:inherit}
+  .mclose:hover{color:var(--txt)}
+  .mbody{padding:17px 19px;overflow-y:auto;flex:1}
+  .mbody textarea{min-height:330px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;resize:vertical}
+  .mfoot{padding:12px 19px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(max-width:520px){.presets{grid-template-columns:1fr}}
+  .preset{background:var(--card2);border:1px solid var(--line2);border-radius:10px;padding:13px;cursor:pointer;font-family:inherit;text-align:left;transition:.14s}
+  .preset:hover{border-color:var(--acc);background:rgba(109,94,252,.08)}
+  .preset .pn{font-size:12.5px;font-weight:800;margin-bottom:2px}
+  .preset .pd{font-size:10.5px;color:var(--dim);line-height:1.35}
+
+  .empty{text-align:center;padding:30px 18px;color:var(--dim);font-size:12.5px;line-height:1.6;background:var(--card);border:1px dashed var(--line2);border-radius:11px}
+  .empty b{display:block;color:var(--muted);font-size:13.5px;margin-bottom:5px}
+  .muted{color:var(--muted)}
+  @media print{header,.stepper,.footbar,.no-print{display:none!important}body{background:#fff;color:#000;padding:0}.block{border:1px solid #ccc;background:#fff;color:#000;break-inside:avoid}input,select{background:#fff;color:#000;border:1px solid #ccc}}
+</style>
+</head>
+<body class="locked">
+
+<div id="splash">
+  <div class="s-in">
+    <div class="s-logo">
+      <svg viewBox="0 0 64 64" fill="none">
+        <defs><linearGradient id="lgS" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#00e0b8"/></linearGradient></defs>
+        <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgS)" opacity=".13"/>
+        <rect x="2" y="2" width="60" height="60" rx="17" stroke="url(#lgS)" stroke-width="1.6" opacity=".85"/>
+        <path d="M21 19.5 L33.5 32 L21 44.5" stroke="url(#lgS)" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M35 19.5 L47.5 32 L35 44.5" stroke="#fff" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>
+      </svg>
+    </div>
+    <div class="s-word">SG<span>AX</span></div>
+    <div class="s-tag">Калькулятор пакета. Шесть шагов — от клиента до цены.</div>
+    <div class="s-line"></div>
+    <button class="s-btn" id="startBtn">Начать →</button>
+  </div>
+  <div class="s-foot">v6 · пошаговый · SGAX 2026</div>
+</div>
+
+<header class="no-print">
+  <div class="hrow">
+    <div class="brand">
+      <div class="mk">
+        <svg viewBox="0 0 64 64" fill="none">
+          <defs><linearGradient id="lgH" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#00e0b8"/></linearGradient></defs>
+          <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgH)" opacity=".13"/>
+          <rect x="2" y="2" width="60" height="60" rx="17" stroke="url(#lgH)" stroke-width="1.6" opacity=".85"/>
+          <path d="M21 19.5 L33.5 32 L21 44.5" stroke="url(#lgH)" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M35 19.5 L47.5 32 L35 44.5" stroke="#fff" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>
+        </svg>
+      </div>
+      <div>
+        <div class="nm">SG<span>AX</span></div>
+        <div class="sub">калькулятор пакета</div>
+      </div>
+    </div>
+    <div class="hchips">
+      <div class="chip" id="chipPkg">0 площадок</div>
+      <div class="chip" id="chipRate">15%</div>
+      <div class="chip" id="chipClient"><b>—</b></div>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+  <nav class="stepper" id="stepper"></nav>
+  <main class="stage" id="stage"></main>
+</div>
+
+<div class="footbar no-print">
+  <div class="fbin">
+    <div class="fnums">
+      <div class="fn">Клиент платит<b id="fbClient">0 ₽</b></div>
+      <div class="fn own">Владельцам<b id="fbOwner">0 ₽</b></div>
+      <div class="fn us">Нам<b id="fbUs">0 ₽</b></div>
+      <div class="fn">Маржа<b id="fbMarg">—</b></div>
+    </div>
+    <div class="fbtns">
+      <button class="fbtn" id="fbPrev">← Назад</button>
+      <button class="fbtn pri" id="fbNext">Далее →</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="mbox">
+    <div class="mhead"><h3 id="modalTitle">Текст</h3><button class="mclose" id="modalClose">×</button></div>
+    <div class="mbody"><textarea id="modalText" readonly></textarea></div>
+    <div class="mfoot">
+      <button class="fbtn" id="modalDl">Скачать .txt</button>
+      <button class="fbtn pri" id="modalCopy">Скопировать</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  var KEY='sgax_v6';
+
+  var OPTIONS=[
+    {k:'pin',   n:'Закрепление поста',      d:'Висит сверху ещё 24 часа',      v:50, mode:'pct'},
+    {k:'nodl',  n:'Без удаления',           d:'Остаётся в истории навсегда',   v:60, mode:'pct'},
+    {k:'here',  n:'Пинг @here',             d:'Уведомление активным',          v:40, mode:'pct'},
+    {k:'every', n:'Пинг @everyone',         d:'Уведомление всем участникам',   v:60, mode:'pct'},
+    {k:'role',  n:'Пинг роли',              d:'Только выбранная роль',         v:30, mode:'pct'},
+    {k:'chan',  n:'Отдельный канал',        d:'В своём канале, не в общем',    v:15, mode:'pct'},
+    {k:'urgent',n:'Срочный запуск',         d:'Публикация в течение 24 часов', v:20, mode:'pct'}
+  ];
+
+  var S={
+    step:1, activePlat:null,
+    deal:{client:'',niche:'',type:'',budget:''},
+    plats:[], rate:15, extras:[], overhead:0, refRate:0,
+    minCheck:15000, minMargin:20, round:0
+  };
+
+  var seq=1; function uid(){ return 'p'+(seq++); }
+
+  function money(n){ n=Math.round(n||0); return n.toLocaleString('ru-RU').replace(/\u00A0/g,' ')+' ₽'; }
+  function num(n){ return Math.round(n||0).toLocaleString('ru-RU').replace(/\u00A0/g,' '); }
+  function pct(n){ return (n*100).toFixed(1).replace('.',',')+'%'; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function newPlat(){
+    return {id:uid(),name:'',type:'discord',status:'ok',subs:0,reach:0,price:1500,qty:1,opts:{},customOptSum:0,ownRate:null};
+  }
+
+  /* ---------- persist ---------- */
+  var tSave;
+  function save(){ clearTimeout(tSave); tSave=setTimeout(function(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} },250); }
+  function load(){
+    try{
+      var raw=localStorage.getItem(KEY); if(!raw) return false;
+      var d=JSON.parse(raw); if(!d||!d.plats) return false;
+      S=d;
+      S.plats.forEach(function(p){ if(!p.id)p.id=uid(); if(!p.opts)p.opts={}; if(p.ownRate===undefined)p.ownRate=null; });
+      if(!Array.isArray(S.extras))S.extras=[];
+      if(!S.deal)S.deal={client:'',niche:'',type:'',budget:''};
+      if(!S.step)S.step=1;
+      S.activePlat=null;
+      return true;
+    }catch(e){return false;}
+  }
+
+  /* ---------- calc ---------- */
+  function platCalc(p){
+    var q=parseInt(p.qty,10)||1;
+    var base=(parseFloat(p.price)||0)*q;
+    var optPct=0;
+    OPTIONS.forEach(function(o){ if(p.opts[o.k]) optPct+=o.v/100; });
+    var optsSum=base*optPct+(parseFloat(p.customOptSum)||0);
+    var ownerTotal=base+optsSum;
+    var rate=(p.ownRate!==null&&p.ownRate!==undefined&&p.ownRate!=='')?parseFloat(p.ownRate)/100:S.rate/100;
+    if(!rate||rate<=0||rate>=1) rate=S.rate/100;
+    var clientPlace=ownerTotal/(1-rate);
+    return {base:base,optsSum:optsSum,ownerTotal:ownerTotal,clientPlace:clientPlace,our:clientPlace-ownerTotal,rate:rate,reach:(parseFloat(p.reach)||0)*q,qty:q};
+  }
+
+  function totals(){
+    var o=0,cl=0,our=0,base=0,opts=0,reach=0,qty=0,subs=0,ws=0,wr=0,n=0;
+    S.plats.forEach(function(p){
+      var c=platCalc(p);
+      o+=c.ownerTotal; cl+=c.clientPlace; our+=c.our; base+=c.base; opts+=c.optsSum;
+      reach+=c.reach; qty+=c.qty; subs+=parseFloat(p.subs)||0;
+      if(c.ownerTotal>0){ ws+=c.ownerTotal; wr+=c.rate*c.ownerTotal; n++; }
+    });
+    var srv=0;
+    S.extras.forEach(function(e){ srv+=(parseFloat(e.price)||0); });
+    var ref=our*((parseFloat(S.refRate)||0)/100);
+    var over=parseFloat(S.overhead)||0;
+    var clientTotal=cl+srv;
+    var net=our+srv-ref-over;
+    var roundDiff=0;
+    if(S.round>0){
+      var r=Math.ceil(clientTotal/S.round)*S.round;
+      roundDiff=r-clientTotal; clientTotal=r; net+=roundDiff;
+    }
+    return {owner:o,clientPlace:cl,our:our,base:base,opts:opts,reach:reach,qty:qty,subs:subs,
+      srv:srv,ref:ref,over:over,client:clientTotal,net:net,roundDiff:roundDiff,
+      wRate:ws>0?wr/ws:0, margin:clientTotal>0?net/clientTotal:0,
+      cpv:reach>0?cl/reach:0, perPlat:S.plats.length?net/S.plats.length:0};
+  }
+
+  /* ---------- steps meta ---------- */
+  var STEPS=[
+    {n:1,t:'Клиент',      d:'кто и что рекламируем'},
+    {n:2,t:'Площадки',    d:'список и условия'},
+    {n:3,t:'Наш процент', d:'тариф сделки'},
+    {n:4,t:'Услуги',      d:'креатив и прочее'},
+    {n:5,t:'Расходы',     d:'реферал, правила'},
+    {n:6,t:'Итог',        d:'цена и тексты'}
+  ];
+
+  function renderStepper(){
+    $('stepper').innerHTML=STEPS.map(function(s){
+      var done=false;
+      if(s.n===1) done=!!(S.deal.client||S.deal.niche);
+      if(s.n===2) done=S.plats.length>0 && S.plats.every(function(p){return p.name && parseFloat(p.price);});
+      if(s.n===3) done=true;
+      if(s.n===4) done=true;
+      if(s.n===5) done=true;
+      var cls='sitem'+(S.step===s.n?' on':'')+((done&&S.step!==s.n)?' done':'');
+      return '<button class="'+cls+'" data-step="'+s.n+'"><div class="sn">'+(done&&S.step!==s.n?'✓':s.n)+'</div>'+
+        '<div class="stxt"><div class="st">'+s.t+'</div><div class="sd">'+s.d+'</div></div></button>';
+    }).join('');
+    $('stepper').querySelectorAll('[data-step]').forEach(function(b){
+      b.addEventListener('click',function(){ goStep(parseInt(b.dataset.step,10)); });
+    });
+  }
+
+  function goStep(n){
+    S.step=Math.max(1,Math.min(6,n));
+    S.activePlat=null;
+    render(); save();
+  }
+
+  /* ---------- block helper ---------- */
+  function block(o){
+    return '<div class="block'+(o.open?' open':'')+'" data-block="'+o.id+'">'+
+      '<div class="bhead"><div class="bl">'+
+        '<div class="bnum">'+o.n+'</div>'+
+        '<div><div class="bt">'+o.title+'</div>'+(o.sub?'<div class="bs">'+o.sub+'</div>':'')+'</div>'+
+      '</div><div class="br">'+(o.badge||'')+'<div class="bchev">▶</div></div></div>'+
+      '<div class="bbody">'+o.body+'</div></div>';
+  }
+
+  /* ============ STEP 1 ============ */
+  function step1(){
+    var niches=['RUST','Гейминг','Крипта / Web3','IT / разработка','Аниме','Мемы','Учёба','Бизнес','Другое'];
+    var types=['Telegram Mini App','Игра','Сервис','Магазин','Инфопродукт','Канал','Другое'];
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 1. Клиент</div>';
+    h+='<div class="hsub">Заполни, чтобы не путать сделки и сразу видеть, под какую тему собирать пакет.</div>';
+
+    var body='';
+    body+='<div class="frow"><label class="flabel">Название клиента или ник</label>'+
+      '<input type="text" id="fClient" value="'+esc(S.deal.client)+'" placeholder="Например: RustLand / @manager"></div>';
+    body+='<div class="frow"><label class="flabel">Что рекламируем — выбери из списка</label><div class="pick" id="pkType">'+
+      types.map(function(t){return '<button class="pk'+(S.deal.type===t?' on':'')+'" data-t="'+esc(t)+'">'+t+'</button>';}).join('')+'</div></div>';
+    body+='<div class="frow"><label class="flabel">Ниша — от неё зависит состав пакета</label><div class="pick" id="pkNiche">'+
+      niches.map(function(t){return '<button class="pk'+(S.deal.niche===t?' on':'')+'" data-n="'+esc(t)+'">'+t+'</button>';}).join('')+'</div>'+
+      '<div class="fhint">Пакет собирается из площадок одной тематики. Пока в нише меньше 3 площадок — продавать пакет нельзя.</div></div>';
+    body+='<div class="grid2"><div class="frow"><label class="flabel">Бюджет клиента, ₽</label>'+
+      '<input type="number" id="fBudget" value="'+(S.deal.budget||'')+'" step="1000" placeholder="необязательно"></div>'+
+      '<div class="frow"><label class="flabel">Дата сделки</label><input type="date" id="fDate" value="'+(S.deal.date||'')+'"></div></div>';
+
+    h+=block({id:'b1',n:1,title:'Данные клиента',sub:'кто, что и под какую тему',open:true,
+      badge:(S.deal.client?'<span class="bbadge ok">заполнено</span>':'<span class="bbadge wr">не заполнено</span>'),body:body});
+    h+='</div>';
+    $('stage').innerHTML=h;
+
+    bindBlocks();
+    $('fClient').addEventListener('input',function(){ S.deal.client=this.value; save(); renderStepper(); paintChips(); });
+    $('fBudget').addEventListener('input',function(){ S.deal.budget=this.value; save(); });
+    $('fDate').addEventListener('input',function(){ S.deal.date=this.value; save(); });
+    $('pkType').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        S.deal.type=b.dataset.t;
+        $('pkType').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); save();
+      });
+    });
+    $('pkNiche').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        S.deal.niche=b.dataset.n;
+        $('pkNiche').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); save(); renderStepper();
+      });
+    });
+  }
+
+  /* ============ STEP 2 ============ */
+  function step2(){
+    if(S.activePlat){ return step2detail(); }
+
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 2. Площадки пакета</div>';
+    h+='<div class="hsub">Добавь площадки, потом зайди в каждую и настрой условия. Пакет — это от 3 площадок одной темы.</div>';
+
+    if(!S.plats.length){
+      h+='<div class="empty"><b>Пока ни одной площадки</b>Нажми «Добавить площадку» или возьми готовый пример из шапки (⚡).</div>';
+    } else {
+      h+='<div class="plist">'+S.plats.map(function(p,i){
+        var c=platCalc(p);
+        var st=p.status==='ok'?'<span class="pstat ok">подтв.</span>':p.status==='wait'?'<span class="pstat wait">согл.</span>':'<span class="pstat no">отказ</span>';
+        var nm=p.name||'Без названия';
+        var meta=[];
+        meta.push(p.type==='discord'?'Discord':p.type==='telegram'?'Telegram':p.type==='tma'?'TMA':'VK');
+        if(c.reach) meta.push('охват '+num(c.reach));
+        if(c.qty>1) meta.push(c.qty+' размещ.');
+        return '<div class="pitem" data-plat="'+p.id+'">'+
+          '<div class="pnum">'+(i+1)+'</div>'+
+          '<div class="pinfo"><div class="pnm">'+esc(nm)+st+'</div><div class="pmeta">'+meta.join(' · ')+'</div></div>'+
+          '<div class="pval"><b>'+money(c.ownerTotal)+'</b><span>владельцу</span></div>'+
+          '<div class="parrow">›</div></div>';
+      }).join('')+'</div>';
+    }
+
+    h+='<div class="addrow" style="margin-bottom:12px">'+
+        '<button class="abtn" id="add1">+ Добавить площадку</button>'+
+        '<button class="abtn" id="add3">+ Сразу 3 (пакет)</button>'+
+        '<button class="abtn" id="add5">+ Сразу 5 (пакет)</button>'+
+      '</div>';
+
+    var t=totals();
+    h+='<div class="totalrow"><span class="tl">Итого владельцам</span><span class="tv">'+money(t.owner)+'</span></div>';
+    if(S.plats.length && S.plats.length<3){
+      h+='<div class="alert warn">Меньше 3 площадок — это не пакет. Одна площадка продаётся только если она крупная.</div>';
+    }
+    if(S.deal.niche){
+      h+='<div class="alert ok">Ниша клиента: '+esc(S.deal.niche)+'. Собирай пакет из площадок этой темы.</div>';
+    }
+    h+='</div>';
+    $('stage').innerHTML=h;
+
+    $('stage').querySelectorAll('[data-plat]').forEach(function(el){
+      el.addEventListener('click',function(){ S.activePlat=el.dataset.plat; render(); });
+    });
+    $('add1').addEventListener('click',function(){ S.plats.push(newPlat()); render(); save(); });
+    $('add3').addEventListener('click',function(){ for(var i=0;i<3;i++)S.plats.push(newPlat()); render(); save(); });
+    $('add5').addEventListener('click',function(){ for(var i=0;i<5;i++)S.plats.push(newPlat()); render(); save(); });
+  }
+
+  function step2detail(){
+    var p=S.plats.filter(function(x){return x.id===S.activePlat;})[0];
+    if(!p){ S.activePlat=null; return step2(); }
+    var idx=S.plats.indexOf(p)+1;
+    var c=platCalc(p);
+
+    var h='<div class="page">';
+    h+='<button class="backbtn" id="backList">← К списку площадок</button>';
+    h+='<div class="htitle">Площадка '+idx+'</div>';
+    h+='<div class="hsub">Заполняй по порядку. Суммы пересчитываются сразу.</div>';
+
+    /* --- 1. тип и статус --- */
+    var b1='';
+    b1+='<div class="frow"><label class="flabel">Название</label><input type="text" id="pName" value="'+esc(p.name)+'" placeholder="Например: RUST • Сервер #1"></div>';
+    b1+='<div class="frow"><label class="flabel">Тип площадки</label><div class="pick" id="pkPType">'+
+      [['discord','Discord'],['telegram','Telegram'],['tma','TMA'],['vk','VK']].map(function(a){
+        return '<button class="pk'+(p.type===a[0]?' on':'')+'" data-v="'+a[0]+'">'+a[1]+'</button>';
+      }).join('')+'</div></div>';
+    b1+='<div class="frow"><label class="flabel">Статус</label><div class="pick" id="pkPStatus">'+
+      [['ok','Подтверждена'],['wait','На согласовании'],['no','Отказ']].map(function(a){
+        return '<button class="pk'+(p.status===a[0]?' on':'')+'" data-v="'+a[0]+'">'+a[1]+'</button>';
+      }).join('')+'</div><div class="fhint">Не собирай пакет из площадок со статусом «отказ» — это ошибка, клиент увидит.</div></div>';
+    h+=block({id:'d1',n:1,title:'Что это за площадка',sub:'название, тип, статус',open:true,body:b1});
+
+    /* --- 2. аудитория --- */
+    var b2='';
+    b2+='<div class="grid2">'+
+      '<div class="frow"><label class="flabel">Подписчиков</label><input type="number" id="pSubs" value="'+(p.subs||0)+'" step="100"></div>'+
+      '<div class="frow"><label class="flabel">Средний охват поста</label><input type="number" id="pReach" value="'+(p.reach||0)+'" step="100"></div>'+
+      '</div>';
+    b2+='<div class="frow"><button class="abtn" id="btnEst" style="min-width:0">Оценить охват как 30% от подписчиков</button>'+
+      '<div class="fhint">Охват — это сколько реально смотрят пост, а не сколько подписчиков. Бери из статистики площадки.</div></div>';
+    h+=block({id:'d2',n:2,title:'Аудитория',sub:'подписчики и реальный охват',open:true,body:b2});
+
+    /* --- 3. условия --- */
+    var b3='';
+    b3+='<div class="grid2">'+
+      '<div class="frow"><label class="flabel">Цена владельца за 1 размещение, ₽</label><input type="number" id="pPrice" value="'+(p.price||0)+'" step="50"></div>'+
+      '<div class="frow"><label class="flabel">Сколько размещений берём</label><input type="number" id="pQty" value="'+(p.qty||1)+'" min="1" max="30" step="1"></div>'+
+      '</div>';
+    b3+='<div class="totalrow" style="margin-top:12px"><span class="tl">Владельцу за всё</span><span class="tv" id="liveOwner">'+money(c.ownerTotal)+'</span></div>';
+    h+=block({id:'d3',n:3,title:'Условия владельца',sub:'его цена — мы её не меняем',open:true,body:b3});
+
+    /* --- 4. допродажи --- */
+    var b4='<div class="fhint" style="margin-bottom:10px">Отметь, что продаём сверху. Проценты считаются от цены владельца, суммы показаны за всё количество.</div>';
+    OPTIONS.forEach(function(o){
+      var on=!!p.opts[o.k];
+      var add=c.base*(o.v/100);
+      b4+='<div class="optrow'+(on?' on':'')+'" data-opt="'+o.k+'">'+
+        '<div class="obox">✓</div>'+
+        '<div class="oname">'+o.n+'<span>'+o.d+'</span></div>'+
+        '<div class="oprice">+'+o.v+'% · '+money(add)+'</div></div>';
+    });
+    b4+='<div class="frow"><label class="flabel">Своя допродажа, ₽ (если чего-то нет в списке)</label>'+
+      '<input type="number" id="pCustom" value="'+(p.customOptSum||0)+'" step="100" placeholder="0"></div>';
+    b4+='<div class="totalrow"><span class="tl">Допродажи по площадке</span><span class="tv" id="liveOpts">'+money(c.optsSum)+'</span></div>';
+    h+=block({id:'d4',n:4,title:'Допродажи',sub:'закреп, пинги, «без удаления»',open:true,
+      badge:(c.optsSum>0?'<span class="bbadge ok">+'+money(c.optsSum)+'</span>':'<span class="bbadge">нет</span>'),body:b4});
+
+    /* --- 5. ставка --- */
+    var b5='';
+    b5+='<div class="frow"><label class="flabel">Ставка по этой площадке</label><div class="pick" id="pkPRate">'+
+      '<button class="pk'+((p.ownRate===null||p.ownRate===undefined||p.ownRate==='')?' on':'')+'" data-v="global">Общая ('+Math.round(S.rate)+'%)</button>'+
+      '<button class="pk'+((p.ownRate!==null&&p.ownRate!==undefined&&p.ownRate!=='')?' on':'')+'" data-v="own">Своя</button>'+
+      '</div></div>';
+    b5+='<div class="frow" id="ownRateWrap" style="'+(p.ownRate!==null&&p.ownRate!==undefined&&p.ownRate!==''?'':'display:none')+'">'+
+      '<label class="flabel">Своя ставка, %</label><input type="number" id="pOwnRate" value="'+(p.ownRate||'')+'" min="5" max="80" step="1" placeholder="например 35"></div>';
+    b5+='<div class="fhint">Ставка — наш процент с того, что платит клиент. Владелец всё равно получает свою цену целиком.</div>';
+    h+=block({id:'d5',n:5,title:'Наша ставка',sub:'общая или своя для этой площадки',open:false,body:b5});
+
+    /* итог по площадке */
+    h+='<div class="sumhero" style="margin-top:14px;text-align:left;padding:18px">';
+    h+='<div class="brow"><span>Владельцу</span><b id="liveOwner2">'+money(c.ownerTotal)+'</b></div>';
+    h+='<div class="brow"><span>Клиенту за площадку</span><b id="liveClient">'+money(c.clientPlace)+'</b></div>';
+    h+='<div class="brow"><span>Ставка</span><b id="liveRate">'+pct(c.rate)+'</b></div>';
+    h+='<div class="brow hi"><span>Нам с площадки</span><b id="liveUs">'+money(c.our)+'</b></div>';
+    h+='</div>';
+
+    h+='<div class="acts"><button class="actbtn g" id="btnClone">Клонировать площадку</button>'+
+       '<button class="actbtn o" id="btnDel">Удалить площадку</button></div>';
+    h+='</div>';
+    $('stage').innerHTML=h;
+
+    bindBlocks();
+
+    function relive(){
+      var cc=platCalc(p);
+      if($('liveOwner')) $('liveOwner').textContent=money(cc.ownerTotal);
+      if($('liveOwner2')) $('liveOwner2').textContent=money(cc.ownerTotal);
+      if($('liveClient')) $('liveClient').textContent=money(cc.clientPlace);
+      if($('liveRate')) $('liveRate').textContent=pct(cc.rate);
+      if($('liveUs')) $('liveUs').textContent=money(cc.our);
+      if($('liveOpts')) $('liveOpts').textContent=money(cc.optsSum);
+      paintChips();
+    }
+
+    $('backList').addEventListener('click',function(){ S.activePlat=null; render(); });
+
+    $('pName').addEventListener('input',function(){ p.name=this.value; save(); renderStepper(); });
+    $('pSubs').addEventListener('input',function(){ p.subs=parseFloat(this.value)||0; save(); paintChips(); });
+    $('pReach').addEventListener('input',function(){ p.reach=parseFloat(this.value)||0; save(); relive(); });
+    $('pPrice').addEventListener('input',function(){ p.price=parseFloat(this.value)||0; save(); relive(); });
+    $('pQty').addEventListener('input',function(){ p.qty=Math.max(1,parseInt(this.value,10)||1); save(); relive(); });
+    $('pCustom').addEventListener('input',function(){ p.customOptSum=parseFloat(this.value)||0; save(); relive(); });
+
+    $('btnEst').addEventListener('click',function(){
+      p.reach=Math.round((parseFloat(p.subs)||0)*0.3);
+      $('pReach').value=p.reach; save(); relive();
+    });
+
+    $('pkPType').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        p.type=b.dataset.v; $('pkPType').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); save();
+      });
+    });
+    $('pkPStatus').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        p.status=b.dataset.v; $('pkPStatus').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); save(); renderStepper();
+      });
+    });
+
+    $('stage').querySelectorAll('[data-opt]').forEach(function(row){
+      row.addEventListener('click',function(){
+        var k=row.dataset.opt;
+        p.opts[k]=!p.opts[k];
+        row.classList.toggle('on',!!p.opts[k]);
+        save(); relive();
+      });
+    });
+
+    $('pkPRate').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        $('pkPRate').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on');
+        if(b.dataset.v==='global'){ p.ownRate=null; $('ownRateWrap').style.display='none'; }
+        else { p.ownRate=parseFloat($('pOwnRate').value)||30; $('ownRateWrap').style.display='block'; }
+        save(); relive();
+      });
+    });
+    if($('pOwnRate')) $('pOwnRate').addEventListener('input',function(){ p.ownRate=parseFloat(this.value)||0; save(); relive(); });
+
+    $('btnClone').addEventListener('click',function(){
+      var cp=JSON.parse(JSON.stringify(p)); cp.id=uid(); cp.name=(p.name?p.name+' (копия)':'');
+      S.plats.push(cp); S.activePlat=null; render(); save();
+    });
+    $('btnDel').addEventListener('click',function(){
+      if(!confirm('Удалить площадку?')) return;
+      S.plats=S.plats.filter(function(x){return x.id!==p.id;});
+      S.activePlat=null; render(); save();
+    });
+  }
+
+  /* ============ STEP 3 ============ */
+  function step3(){
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 3. Наш процент</div>';
+    h+='<div class="hsub">Выбери тариф. Процент считается от того, что платит клиент. Владелец всегда получает свою цену целиком.</div>';
+
+    h+='<div class="grid2" style="margin-bottom:12px">'+
+      '<button class="tcard'+(S.rate===15?' on':'')+'" data-rate="15"><div class="tn">Эксклюзив</div><div class="tp">15%</div><div class="td">Вся реклама клиента идёт через нас. Дешевле для клиента — дороже по объёму для нас.</div></button>'+
+      '<button class="tcard'+(S.rate===35?' on':'')+'" data-rate="35"><div class="tn">Стандарт</div><div class="tp">35%</div><div class="td">Клиент комбинирует наши площадки со своими. Наш объём меньше — процент выше.</div></button>'+
+      '</div>';
+
+    var b='';
+    b+='<div class="frow"><label class="flabel">Или поставь свой процент</label>'+
+      '<input type="range" id="rRate" min="5" max="50" value="'+Math.round(S.rate)+'" step="1">'+
+      '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:5px"><span>5%</span><b style="color:var(--txt);font-size:12px" id="rRateVal">'+Math.round(S.rate)+'%</b><span>50%</span></div>'+
+      '<div class="fhint">Режим прикормки: пока набираем пул — держим 15% всем. Потом переводим на эксклюзив или поднимаем до 35%.</div></div>';
+    h+=block({id:'r1',n:1,title:'Свой процент',sub:'если нужен нестандартный',open:false,body:b});
+
+    var t=totals();
+    if(S.plats.length){
+      h+='<div class="totalrow"><span class="tl">Наш процент со сделки</span><span class="tv" style="color:var(--acc2)">'+money(t.our)+'</span></div>';
+      var mixed=S.plats.filter(function(p){return p.ownRate!==null&&p.ownRate!==undefined&&p.ownRate!=='';}).length;
+      if(mixed){
+        h+='<div class="alert warn">У '+mixed+' площадок стоит своя ставка. Средневзвешенная по сделке: '+pct(t.wRate)+'.</div>';
+      }
+    } else {
+      h+='<div class="alert warn">Сначала добавь площадки на шаге 2 — иначе считать нечего.</div>';
+    }
+    h+='</div>';
+    $('stage').innerHTML=h;
+    bindBlocks();
+
+    $('stage').querySelectorAll('[data-rate]').forEach(function(b2){
+      b2.addEventListener('click',function(){
+        S.rate=parseFloat(b2.dataset.rate);
+        $('stage').querySelectorAll('[data-rate]').forEach(function(x){x.classList.remove('on');});
+        b2.classList.add('on');
+        $('rRate').value=S.rate;
+        $('rRateVal').textContent=Math.round(S.rate)+'%';
+        save(); paintChips(); render();
+      });
+    });
+    $('rRate').addEventListener('input',function(){
+      S.rate=parseFloat(this.value);
+      $('rRateVal').textContent=Math.round(S.rate)+'%';
+      $('stage').querySelectorAll('[data-rate]').forEach(function(x){x.classList.toggle('on',parseFloat(x.dataset.rate)===S.rate);});
+      save(); paintChips();
+    });
+    $('rRate').addEventListener('change',function(){ render(); });
+  }
+
+  /* ============ STEP 4 ============ */
+  function step4(){
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 4. Наши услуги</div>';
+    h+='<div class="hsub">Что продаём сверх размещений. Здесь же — сколько нам это стоит.</div>';
+
+    if(!S.extras.length){
+      h+='<div class="empty"><b>Услуг пока нет</b>Можно продать креатив, медиаплан, ведение, отчётность.</div>';
+    } else {
+      h+='<div class="block open"><div class="bhead" style="cursor:default"><div class="bl"><div class="bnum">₽</div><div><div class="bt">Список услуг</div><div class="bs">название · цена клиенту · наша себестоимость</div></div></div></div><div class="bbody" style="display:block">';
+      S.extras.forEach(function(e,i){
+        h+='<div class="exrow">'+
+          '<input type="text" value="'+esc(e.name)+'" placeholder="Название" data-ex="'+i+'" data-f="name">'+
+          '<input type="number" value="'+(e.price||0)+'" step="500" placeholder="клиенту" data-ex="'+i+'" data-f="price">'+
+          '<input type="number" value="'+(e.cost||0)+'" step="500" placeholder="нам" data-ex="'+i+'" data-f="cost">'+
+          '<button class="abtn" style="min-width:0;padding:9px;border-style:solid;border-color:rgba(255,92,122,.3);color:var(--red)" data-exdel="'+i+'">×</button>'+
+          '</div>';
+      });
+      h+='<div class="fhint" style="margin-top:6px">Первое поле — что клиент увидит в счёте. Второе — наша цена клиенту. Третье — сколько мы платим исполнителю.</div>';
+      h+='</div></div>';
+    }
+
+    h+='<div class="addrow" style="margin-top:12px">'+
+      '<button class="abtn" id="addEx">+ Своя услуга</button>'+
+      '<button class="abtn" id="presetEx">+ Из списка готовых</button>'+
+      '</div>';
+
+    var t=totals();
+    h+='<div class="totalrow"><span class="tl">Услуги клиенту</span><span class="tv" style="color:var(--acc2)">'+money(t.srv)+'</span></div>';
+    h+='</div>';
+    $('stage').innerHTML=h;
+
+    $('stage').querySelectorAll('input[data-ex]').forEach(function(el){
+      el.addEventListener('input',function(){
+        var i=parseInt(el.dataset.ex,10), f=el.dataset.f;
+        if(!S.extras[i]) return;
+        if(f==='name') S.extras[i].name=el.value; else S.extras[i][f]=parseFloat(el.value)||0;
+        save(); paintChips();
+      });
+    });
+    $('stage').querySelectorAll('[data-exdel]').forEach(function(b){
+      b.addEventListener('click',function(){ S.extras.splice(parseInt(b.dataset.exdel,10),1); render(); save(); });
+    });
+    $('addEx').addEventListener('click',function(){ S.extras.push({name:'',price:0,cost:0}); render(); save(); });
+    $('presetEx').addEventListener('click',openExtraPresets);
+  }
+
+  var EXTRA_LIB=[
+    {name:'Базовая редактура текста',price:3000,cost:1000},
+    {name:'Текст под каждую площадку',price:9000,cost:3000},
+    {name:'Текст + визуал',price:15000,cost:5000},
+    {name:'Нативная подача',price:25000,cost:9000},
+    {name:'Медиаплан и отчётность',price:4000,cost:1000},
+    {name:'Концепция рубрики',price:60000,cost:20000}
+  ];
+  function openExtraPresets(){
+    var box=$('modal');
+    $('modalTitle').textContent='Готовые услуги';
+    var ta=$('modalText'); ta.style.display='none';
+    var body=box.querySelector('.mbody');
+    var old=body.querySelector('.presets'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='presets';
+    d.innerHTML=EXTRA_LIB.map(function(e,i){
+      return '<button class="preset" data-i="'+i+'"><div class="pn">'+e.name+'</div><div class="pd">клиенту '+money(e.price)+' · нам '+money(e.cost)+'</div></button>';
+    }).join('');
+    body.appendChild(d);
+    box.classList.add('open');
+    d.querySelectorAll('.preset').forEach(function(b){
+      b.addEventListener('click',function(){
+        var e=EXTRA_LIB[parseInt(b.dataset.i,10)];
+        S.extras.push({name:e.name,price:e.price,cost:e.cost});
+        box.classList.remove('open'); ta.style.display=''; d.remove();
+        render(); save();
+      });
+    });
+  }
+
+  /* ============ STEP 5 ============ */
+  function step5(){
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 5. Расходы и правила</div>';
+    h+='<div class="hsub">Всё, что уменьшает нашу маржу и задаёт порог сделки.</div>';
+
+    var b1='';
+    b1+='<div class="grid2">'+
+      '<div class="frow"><label class="flabel">Прочие расходы на сделку, ₽</label><input type="number" id="rOver" value="'+(S.overhead||0)+'" step="500"><div class="fhint">ОРД, комиссии за перевод, подрядчики.</div></div>'+
+      '<div class="frow"><label class="flabel">Реферал владельцу площадки, %</label><input type="number" id="rRef" value="'+(S.refRate||0)+'" min="0" max="50" step="5"><div class="fhint">Если владелец привёл нам клиента. Считается от нашего процента.</div></div>'+
+      '</div>';
+    h+=block({id:'e1',n:1,title:'Расходы',sub:'что вычитаем из маржи',open:true,body:b1});
+
+    var b2='';
+    b2+='<div class="grid2">'+
+      '<div class="frow"><label class="flabel">Минимальный чек клиента, ₽</label><input type="number" id="rMin" value="'+(S.minCheck||0)+'" step="1000"></div>'+
+      '<div class="frow"><label class="flabel">Минимальная маржа, %</label><input type="number" id="rMarg" value="'+(S.minMargin||0)+'" step="1"></div>'+
+      '</div><div class="fhint">Если сделка ниже порога — калькулятор предупредит на шаге «Итог».</div>';
+    h+=block({id:'e2',n:2,title:'Пороги',sub:'ниже этого не продаём',open:true,body:b2});
+
+    var b3='';
+    b3+='<div class="frow"><label class="flabel">Округление итоговой цены</label><div class="pick" id="pkRound">'+
+      [[0,'Без округления'],[100,'До 100 ₽'],[500,'До 500 ₽'],[1000,'До 1000 ₽']].map(function(a){
+        return '<button class="pk'+(S.round===a[0]?' on':'')+'" data-v="'+a[0]+'">'+a[1]+'</button>';
+      }).join('')+'</div>'+
+      '<div class="fhint">Разница уходит в нашу маржу. Удобно, когда клиенту нужна круглая сумма.</div></div>';
+    h+=block({id:'e3',n:3,title:'Округление',sub:'подровнять цену для клиента',open:false,body:b3});
+
+    h+='</div>';
+    $('stage').innerHTML=h;
+    bindBlocks();
+
+    $('rOver').addEventListener('input',function(){ S.overhead=parseFloat(this.value)||0; save(); paintChips(); });
+    $('rRef').addEventListener('input',function(){ S.refRate=parseFloat(this.value)||0; save(); paintChips(); });
+    $('rMin').addEventListener('input',function(){ S.minCheck=parseFloat(this.value)||0; save(); });
+    $('rMarg').addEventListener('input',function(){ S.minMargin=parseFloat(this.value)||0; save(); });
+    $('pkRound').querySelectorAll('.pk').forEach(function(b){
+      b.addEventListener('click',function(){
+        S.round=parseFloat(b.dataset.v)||0;
+        $('pkRound').querySelectorAll('.pk').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); save(); paintChips();
+      });
+    });
+  }
+
+  /* ============ STEP 6 ============ */
+  function step6(){
+    var t=totals();
+    var h='<div class="page">';
+    h+='<div class="htitle">Шаг 6. Итог</div>';
+    h+='<div class="hsub">Проверь цифры и забери готовые тексты: клиенту, владельцу и внутреннюю раскладку.</div>';
+
+    h+='<div class="sumhero"><div class="cap">Клиент платит</div><div class="val">'+money(t.client)+'</div>'+
+      '<div class="sub">'+(S.plats.length||0)+' площадок · '+t.qty+' размещений · охват '+num(t.reach)+'</div></div>';
+
+    h+='<div class="s2"><div class="own"><div class="c">Владельцам</div><div class="v">'+money(t.owner)+'</div><div class="p">'+pct(t.client>0?t.owner/t.client:0)+' от чека</div></div>'+
+      '<div class="us"><div class="c">Нам</div><div class="v">'+money(t.net)+'</div><div class="p">маржа '+pct(t.margin)+'</div></div></div>';
+
+    var b='';
+    b+='<div class="brow"><span>Размещения у владельцев</span><b>'+money(t.base)+'</b></div>';
+    b+='<div class="brow sub"><span>допродажи по площадкам</span><b>'+money(t.opts)+'</b></div>';
+    b+='<div class="brow"><span>Наши услуги</span><b>'+money(t.srv)+'</b></div>';
+    b+='<div class="brow"><span>Наш процент</span><b>'+money(t.our)+'</b></div>';
+    b+='<div class="brow sub"><span>средневзвешенная ставка</span><b>'+pct(t.wRate)+'</b></div>';
+    if(t.ref>0) b+='<div class="brow sub"><span>реферал владельцу</span><b style="color:var(--warn)">−'+money(t.ref)+'</b></div>';
+    if(t.over>0) b+='<div class="brow sub"><span>прочие расходы</span><b style="color:var(--warn)">−'+money(t.over)+'</b></div>';
+    if(t.roundDiff>0) b+='<div class="brow sub"><span>округление</span><b>+'+money(t.roundDiff)+'</b></div>';
+    b+='<div class="brow hi"><span>Нам чистыми</span><b>'+money(t.net)+'</b></div>';
+    b+='<div class="brow"><span>С площадки</span><b>'+money(t.perPlat)+'</b></div>';
+    b+='<div class="brow"><span>Цена контакта клиенту</span><b>'+(t.cpv>0?t.cpv.toFixed(2).replace('.',',')+' ₽':'—')+'</b></div>';
+    h+=block({id:'s1',n:1,title:'Раскладка по деньгам',sub:'из чего состоит сумма',open:true,body:b});
+
+    /* проверки */
+    var chk=[];
+    function add(ok,txt,lvl){ chk.push({ok:ok,txt:txt,lvl:lvl||(ok?'ok':'wr')}); }
+    add(!!S.deal.client, S.deal.client?'Клиент указан':'Не указан клиент');
+    add(!!S.deal.niche, S.deal.niche?'Ниша указана':'Не указана ниша');
+    add(S.plats.length>=3, S.plats.length>=3?'Пакет из '+S.plats.length+' площадок':'Меньше 3 площадок — не пакет', S.plats.length>=3?'ok':'wr');
+    var noP=S.plats.filter(function(p){return !parseFloat(p.price);}).length;
+    add(noP===0, noP===0?'Цены владельцев заполнены':noP+' площадок без цены', noP===0?'ok':'bd');
+    var noR=S.plats.filter(function(p){return !parseFloat(p.reach);}).length;
+    add(noR===0, noR===0?'Охваты заполнены':noR+' площадок без охвата', noR===0?'ok':'wr');
+    var noN=S.plats.filter(function(p){return !p.name;}).length;
+    add(noN===0, noN===0?'Все площадки названы':noN+' площадок без названия', noN===0?'ok':'wr');
+    var rej=S.plats.filter(function(p){return p.status==='no';}).length;
+    add(rej===0, rej===0?'Нет площадок со статусом «отказ»':rej+' площадок со статусом «отказ»', rej===0?'ok':'bd');
+    add(t.opts>0||t.srv>0, (t.opts>0||t.srv>0)?'Есть допродажи':'Нет ни одной допродажи', (t.opts>0||t.srv>0)?'ok':'wr');
+    add(t.net>0, t.net>0?'Маржа положительная':'Убыток', t.net>0?'ok':'bd');
+    add(t.client>=(S.minCheck||0), t.client>=(S.minCheck||0)?'Чек выше минимума':'Чек ниже минимума', t.client>=(S.minCheck||0)?'ok':'wr');
+    add(t.margin*100>=(S.minMargin||0), t.margin*100>=(S.minMargin||0)?'Маржа выше порога':'Маржа ниже порога', t.margin*100>=(S.minMargin||0)?'ok':'wr');
+
+    var bchk=chk.map(function(c){
+      var ic=c.lvl==='ok'?'✓':c.lvl==='bd'?'✕':'!';
+      return '<div class="checkrow"><i class="'+c.lvl+'">'+ic+'</i><span>'+esc(c.txt)+'</span></div>';
+    }).join('');
+    h+=block({id:'s2',n:2,title:'Проверки перед отправкой',sub:chk.filter(function(c){return c.lvl!=='ok';}).length+' замечаний',open:true,body:bchk});
+
+    h+='<div class="acts" style="margin-top:14px">'+
+      '<button class="actbtn" id="btnTxtClient">Текст клиенту</button>'+
+      '<button class="actbtn o" id="btnTxtOwner">Текст владельцу</button>'+
+      '<button class="actbtn g" id="btnTxtInt">Внутренняя раскладка</button>'+
+      '<button class="actbtn g" id="btnTxtCsv">Таблица (CSV)</button>'+
+      '</div>';
+    h+='<div class="acts" style="grid-template-columns:1fr 1fr"><button class="actbtn g" id="btnPrint">Печать / PDF</button><button class="actbtn g" id="btnRestart">Начать заново</button></div>';
+
+    h+='</div>';
+    $('stage').innerHTML=h;
+    bindBlocks();
+
+    $('btnTxtClient').addEventListener('click',function(){ openModal('Текст клиенту',textClient()); });
+    $('btnTxtOwner').addEventListener('click',function(){ openModal('Текст владельцу',textOwner()); });
+    $('btnTxtInt').addEventListener('click',function(){ openModal('Внутренняя раскладка',textInternal()); });
+    $('btnTxtCsv').addEventListener('click',function(){ openModal('CSV для таблицы',textCsv()); });
+    $('btnPrint').addEventListener('click',function(){ window.print(); });
+    $('btnRestart').addEventListener('click',function(){
+      if(!confirm('Сбросить всё и начать заново?')) return;
+      localStorage.removeItem(KEY); location.reload();
+    });
+  }
+
+  /* ---------- blocks ---------- */
+  function bindBlocks(){
+    $('stage').querySelectorAll('.block .bhead').forEach(function(h){
+      h.addEventListener('click',function(){
+        var bl=h.parentNode;
+        bl.classList.toggle('open');
+      });
+    });
+  }
+
+  /* ---------- texts ---------- */
+  function textClient(){
+    var t=totals(), L=[];
+    L.push('SGAX — рекламный пакет');
+    L.push('—'.repeat(30));
+    if(S.deal.client) L.push('Клиент: '+S.deal.client);
+    if(S.deal.niche) L.push('Тематика: '+S.deal.niche);
+    if(S.deal.date) L.push('Дата: '+S.deal.date);
+    L.push('');
+    L.push('ПАКЕТ: '+S.plats.length+' площадок, '+t.qty+' размещений');
+    L.push('Прогноз охвата: '+num(t.reach));
+    L.push('');
+    L.push('Площадки:');
+    S.plats.forEach(function(p,i){
+      var c=platCalc(p), o=[];
+      OPTIONS.forEach(function(x){ if(p.opts[x.k]) o.push(x.n); });
+      L.push((i+1)+'. '+(p.name||'площадка')+' — '+c.qty+' размещ.');
+      L.push('   охват '+num(c.reach)+(o.length?' · '+o.join(', '):''));
+    });
+    L.push('');
+    L.push('ЧТО ВХОДИТ');
+    L.push('— подбор площадок под задачу и тематику');
+    L.push('— согласование форматов и дат с каждой площадкой');
+    if(t.srv>0) L.push('— производство материалов');
+    L.push('— контроль выхода: скриншот и ссылка по каждому размещению');
+    L.push('— единый отчёт по всему пакету');
+    L.push('');
+    L.push('СТОИМОСТЬ');
+    L.push('Размещения: '+money(t.clientPlace));
+    if(t.srv>0){
+      L.push('Услуги: '+money(t.srv));
+      S.extras.forEach(function(e){ if(e.name) L.push('   · '+e.name+' — '+money(e.price)); });
+    }
+    if(t.roundDiff>0) L.push('Округление: +'+money(t.roundDiff));
+    L.push('ИТОГО: '+money(t.client));
+    L.push('');
+    L.push('Срок: медиаплан 48 ч, первые публикации — 3 рабочих дня после оплаты.');
+    L.push('Гарантируем: факт размещения, формат, сроки, отчётность. Возврат при срыве площадки.');
+    return L.join('\n');
+  }
+
+  function textOwner(){
+    var L=[];
+    L.push('Здравствуйте.');
+    L.push('');
+    L.push('SGAX собирает пакет площадок'+(S.deal.niche?' по тематике «'+S.deal.niche+'»':'')+' и продаёт его рекламодателю целиком. Вы входите в этот пакет.');
+    L.push('');
+    L.push('ПО ВАШЕЙ ПЛОЩАДКЕ');
+    S.plats.forEach(function(p){
+      var c=platCalc(p), o=[];
+      OPTIONS.forEach(function(x){ if(p.opts[x.k]) o.push(x.n); });
+      L.push('· '+(p.name||'площадка'));
+      L.push('  размещений: '+c.qty);
+      L.push('  формат: '+(o.length?o.join(', '):'стандартный пост'));
+      L.push('  ваша оплата: '+money(c.ownerTotal)+' (ровно ваш прайс)');
+    });
+    L.push('');
+    L.push('КАК РАБОТАЕМ');
+    L.push('— клиента находим и ведём мы');
+    L.push('— материал готовим и согласовываем мы');
+    L.push('— оплата вперёд, до публикации');
+    L.push('— от вас: подтвердить дату, опубликовать в срок, прислать скриншот');
+    L.push('— не размещаем: 18+, нарушение ToS, скам');
+    L.push('— нагрузка: не больше 5 рекламных постов в неделю');
+    L.push('');
+    L.push('Если условия подходят — подтвердите дату, и я закрепляю вас в пакете.');
+    return L.join('\n');
+  }
+
+  function textInternal(){
+    var t=totals(), L=[];
+    L.push('ВНУТРЕННЯЯ РАСКЛАДКА — не отправлять клиенту');
+    L.push('='.repeat(38));
+    L.push('Клиент: '+(S.deal.client||'—'));
+    L.push('Ниша: '+(S.deal.niche||'—'));
+    L.push('Дата: '+(S.deal.date||'—'));
+    L.push('');
+    S.plats.forEach(function(p,i){
+      var c=platCalc(p), o=[];
+      OPTIONS.forEach(function(x){ if(p.opts[x.k]) o.push(x.n); });
+      L.push((i+1)+'. '+(p.name||'без названия')+' ['+p.type+', '+p.status+']');
+      L.push('   охват '+num(p.reach)+' × '+c.qty+(o.length?' · '+o.join(', '):''));
+      L.push('   база '+money(c.base)+' + допродажи '+money(c.optsSum)+' = владельцу '+money(c.ownerTotal));
+      L.push('   клиенту '+money(c.clientPlace)+' (ставка '+pct(c.rate)+') → нам '+money(c.our));
+    });
+    L.push('');
+    L.push('ИТОГО');
+    L.push('Владельцам: '+money(t.owner));
+    L.push('Наши услуги: '+money(t.srv));
+    L.push('Клиент платит: '+money(t.client));
+    L.push('Наш процент: '+money(t.our));
+    L.push('Средневзвешенная ставка: '+pct(t.wRate));
+    if(t.ref>0) L.push('Реферал владельцу: −'+money(t.ref));
+    if(t.over>0) L.push('Прочие расходы: −'+money(t.over));
+    L.push('НАМ ЧИСТЫМИ: '+money(t.net));
+    L.push('Маржа: '+pct(t.margin));
+    L.push('С площадки: '+money(t.perPlat));
+    L.push('CPV клиенту: '+(t.cpv>0?t.cpv.toFixed(2).replace('.',',')+' ₽':'—'));
+    return L.join('\n');
+  }
+
+  function textCsv(){
+    var L=['Площадка;Тип;Статус;Подписчики;Охват;Кол-во;Цена владельца;Допродажи;Владельцу всего;Ставка;Клиенту;Нам'];
+    S.plats.forEach(function(p){
+      var c=platCalc(p);
+      L.push([(p.name||'').replace(/;/g,','),p.type,p.status,num(p.subs),num(c.reach),c.qty,num(p.price),num(c.optsSum),num(c.ownerTotal),(c.rate*100).toFixed(0)+'%',num(c.clientPlace),num(c.our)].join(';'));
+    });
+    var t=totals();
+    L.push('');
+    L.push('ИТОГО;;;;;;;;'+num(t.owner)+';;'+num(t.clientPlace)+';'+num(t.our));
+    L.push('Клиент платит: '+num(t.client)+' | Нам: '+num(t.net)+' | Маржа: '+pct(t.margin));
+    return L.join('\n');
+  }
+
+  /* ---------- chips ---------- */
+  function paintChips(){
+    var t=totals();
+    $('chipPkg').textContent=S.plats.length+(S.plats.length>=3?' · пакет':' · мало');
+    $('chipPkg').className='chip '+(S.plats.length>=3?'ok':'wr');
+    $('chipRate').textContent=Math.round(S.rate)+'%';
+    $('chipClient').innerHTML='<b>'+money(t.client)+'</b>';
+    $('fbClient').textContent=money(t.client);
+    $('fbOwner').textContent=money(t.owner);
+    $('fbUs').textContent=money(t.net);
+    $('fbMarg').textContent=t.client>0?pct(t.margin):'—';
+    save();
+  }
+
+  /* ---------- modal ---------- */
+  function openModal(title,text){
+    $('modalTitle').textContent=title;
+    var ta=$('modalText'); ta.style.display=''; ta.value=text;
+    var body=$('modal').querySelector('.mbody'); var p=body.querySelector('.presets'); if(p)p.remove();
+    $('modal').classList.add('open');
+  }
+  $('modalClose').addEventListener('click',function(){ $('modal').classList.remove('open'); });
+  $('modal').addEventListener('click',function(e){ if(e.target===$('modal')) $('modal').classList.remove('open'); });
+  $('modalCopy').addEventListener('click',function(){
+    var t=$('modalText'); t.select(); t.setSelectionRange(0,999999);
+    try{document.execCommand('copy');}catch(e){}
+    var b=$('modalCopy'),o=b.textContent; b.textContent='Скопировано'; setTimeout(function(){b.textContent=o;},1400);
+  });
+  $('modalDl').addEventListener('click',function(){
+    var blob=new Blob([$('modalText').value],{type:'text/plain;charset=utf-8'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=$('modalTitle').textContent.replace(/\s+/g,'_')+'.txt'; a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+  });
+
+  /* ---------- presets (шапка) ---------- */
+  var PLAT_LIB=[
+    {n:'Discord · малый (5к)',   t:'discord', s:5000,  r:1200, p:1200},
+    {n:'Discord · средний (10к)',t:'discord', s:10000, r:2500, p:2000},
+    {n:'Discord · крупный (25к)',t:'discord', s:25000, r:5500, p:4000},
+    {n:'TG · малый (8к)',        t:'telegram',s:8000,  r:2500, p:3500},
+    {n:'TG · средний (20к)',     t:'telegram',s:20000, r:6000, p:8000},
+    {n:'TG · крупный (50к)',     t:'telegram',s:50000, r:14000,p:18000}
+  ];
+  function openPresets(){
+    $('modalTitle').textContent='Готовые пакеты и площадки';
+    var ta=$('modalText'); ta.style.display='none';
+    var body=$('modal').querySelector('.mbody'); var old=body.querySelector('.presets'); if(old)old.remove();
+    var d=document.createElement('div');
+    d.className='presets';
+    d.innerHTML=
+      '<button class="preset" data-p="rust"><div class="pn">RUST-пакет</div><div class="pd">3 Discord-сервера с пингами</div></button>'+
+      '<button class="preset" data-p="tg"><div class="pn">Telegram-пакет</div><div class="pd">5 каналов, крипта</div></button>'+
+      '<button class="preset" data-p="mix"><div class="pn">Микс TG + Discord</div><div class="pd">4 площадки, гейминг</div></button>'+
+      '<button class="preset" data-p="clear"><div class="pn">Очистить всё</div><div class="pd">Начать с нуля</div></button>';
+    var d2=document.createElement('div');
+    d2.innerHTML='<div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:800;margin:16px 0 8px">Добавить одну площадку по шаблону</div>'+
+      '<div class="presets">'+PLAT_LIB.map(function(p,i){
+        return '<button class="preset" data-lib="'+i+'"><div class="pn">'+p.n+'</div><div class="pd">охват '+num(p.r)+' · прайс '+money(p.p)+'</div></button>';
+      }).join('')+'</div>';
+    body.appendChild(d); body.appendChild(d2);
+    $('modal').classList.add('open');
+
+    d.querySelectorAll('.preset').forEach(function(b){
+      b.addEventListener('click',function(){
+        var t=b.dataset.p;
+        $('modal').classList.remove('open'); ta.style.display=''; d.remove(); d2.remove();
+        if(t==='rust')presetRust();
+        else if(t==='tg')presetTg();
+        else if(t==='mix')presetMix();
+        else { S.plats=[]; S.extras=[]; S.deal={client:'',niche:'',type:'',budget:''}; goStep(1); }
+      });
+    });
+    d2.querySelectorAll('[data-lib]').forEach(function(b){
+      b.addEventListener('click',function(){
+        var L=PLAT_LIB[parseInt(b.dataset.lib,10)];
+        var p=newPlat(); p.name=L.n; p.type=L.t; p.subs=L.s; p.reach=L.r; p.price=L.p;
+        S.plats.push(p);
+        $('modal').classList.remove('open'); ta.style.display=''; d.remove(); d2.remove();
+        goStep(2);
+      });
+    });
+  }
+
+  function presetRust(){
+    S.plats=[];
+    var cfg=[['RUST • Сервер #1','discord',12000,3000,2500,{every:true,pin:true}],
+             ['RUST • Сервер #2','discord',8000,2000,1800,{here:true}],
+             ['RUST • Клан-хаб','discord',5000,1200,1200,{}]];
+    cfg.forEach(function(c){
+      var p=newPlat(); p.name=c[0]; p.type=c[1]; p.subs=c[2]; p.reach=c[3]; p.price=c[4]; p.opts=c[5]||{};
+      S.plats.push(p);
+    });
+    S.deal.niche='RUST';
+    S.extras=[{name:'Креатив под Discord',price:6000,cost:2000}];
+    S.rate=15; goStep(2);
+  }
+  function presetTg(){
+    S.plats=[];
+    var cfg=[['TG • Крипта 40к','telegram',40000,12000,14000,{nodl:true}],
+             ['TG • Крипта 25к','telegram',25000,7000,9000,{nodl:true}],
+             ['TG • Инвестиции 18к','telegram',18000,5000,7000,{}],
+             ['TG • Трейдинг 12к','telegram',12000,3200,5000,{}],
+             ['TG • Web3 9к','telegram',9000,2200,3500,{}]];
+    cfg.forEach(function(c){
+      var p=newPlat(); p.name=c[0]; p.type=c[1]; p.subs=c[2]; p.reach=c[3]; p.price=c[4]; p.opts=c[5]||{};
+      S.plats.push(p);
+    });
+    S.deal.niche='Крипта / Web3';
+    S.extras=[{name:'Текст под каждую площадку',price:9000,cost:3000},{name:'Медиаплан и отчётность',price:4000,cost:1000}];
+    S.rate=15; goStep(2);
+  }
+  function presetMix(){
+    S.plats=[];
+    var cfg=[['Discord • Гейминг 15к','discord',15000,4000,3000,{every:true}],
+             ['Discord • Гейминг 8к','discord',8000,2200,1800,{here:true}],
+             ['TG • Гейминг 30к','telegram',30000,9000,11000,{nodl:true}],
+             ['TG • Киберспорт 14к','telegram',14000,4200,5500,{pin:true}]];
+    cfg.forEach(function(c){
+      var p=newPlat(); p.name=c[0]; p.type=c[1]; p.subs=c[2]; p.reach=c[3]; p.price=c[4]; p.opts=c[5]||{};
+      S.plats.push(p);
+    });
+    S.deal.niche='Гейминг';
+    S.extras=[{name:'Нативная подача',price:12000,cost:4000}];
+    S.rate=15; goStep(2);
+  }
+
+  /* ---------- render ---------- */
+  function render(){
+    renderStepper();
+    if(S.step===1) step1();
+    else if(S.step===2) step2();
+    else if(S.step===3) step3();
+    else if(S.step===4) step4();
+    else if(S.step===5) step5();
+    else step6();
+    $('fbPrev').disabled = S.step===1;
+    $('fbNext').textContent = S.step===6 ? 'Готово' : 'Далее →';
+    $('fbNext').disabled = S.step===6;
+    paintChips();
+  }
+
+  /* ---------- init ---------- */
+  $('startBtn').addEventListener('click',function(){
+    $('splash').classList.add('hide');
+    document.body.classList.remove('locked');
+  });
+  $('fbPrev').addEventListener('click',function(){ if(S.step>1) goStep(S.step-1); });
+  $('fbNext').addEventListener('click',function(){ if(S.step<6) goStep(S.step+1); });
+  document.addEventListener('keydown',function(e){
+    if($('modal').classList.contains('open')) return;
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT') return;
+    if(e.key==='ArrowRight'&&S.step<6) goStep(S.step+1);
+    if(e.key==='ArrowLeft'&&S.step>1) goStep(S.step-1);
+  });
+
+  var loaded=load();
+  if(!loaded || !S.plats.length){ S.plats=[newPlat()]; }
+  if(!S.deal.type) S.deal.type='Игра';
+  render();
+})();
+</script>
+</body>
+</html>
